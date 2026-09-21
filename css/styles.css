@@ -916,16 +916,24 @@ html.dark #active-model-select option,
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  max-height: 0;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 1px solid transparent;
+  overflow: hidden;
   opacity: 0;
   transform: translateY(4px);
-  transition: opacity 0.18s var(--ease), transform 0.18s var(--ease);
+  transition: max-height 0.22s var(--ease), margin-top 0.22s var(--ease),
+    padding-top 0.22s var(--ease), border-color 0.18s var(--ease),
+    opacity 0.18s var(--ease), transform 0.18s var(--ease);
 }
 .chat-message.actions-open .chat-message-actions,
 .chat-message:hover .chat-message-actions,
 .chat-message:focus-within .chat-message-actions {
+  max-height: 50px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top-color: rgba(148, 163, 184, 0.18);
   opacity: 1;
   transform: translateY(0);
 }
@@ -1519,6 +1527,200 @@ html.dark #active-model-select option,
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ===== COMMANDS TAB — REDESIGNED ===== */
+.at-command-search-wrap {
+  position: relative;
+  margin: 4px 6px 10px;
+}
+.at-command-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  pointer-events: none;
+}
+.at-command-search-icon svg { width: 15px !important; height: 15px !important; display: block !important; }
+.at-command-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px 9px 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--surface-color);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.15s var(--ease);
+}
+.at-command-search-input:focus {
+  border-color: var(--primary-color);
+}
+
+.at-recent-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 6px 14px;
+  overflow-x: auto;
+}
+.at-recent-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.at-recent-icon svg { width: 14px !important; height: 14px !important; display: block !important; }
+.at-recent-chip {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: background-color 0.12s var(--ease);
+}
+.at-recent-chip:hover { background: var(--surface-hover); }
+.at-recent-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.at-intent-section-label,
+.at-modifier-label,
+.at-subscope-label {
+  margin: 0 6px 8px;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.at-intent-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 0 6px 6px;
+}
+.at-intent-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background-color 0.12s var(--ease), border-color 0.12s var(--ease), transform 0.12s var(--ease);
+}
+.at-intent-card:hover { background: var(--surface-hover); }
+.at-intent-card.selected,
+.at-intent-card.expanded {
+  background: var(--primary-light);
+  border-color: var(--primary-color);
+  box-shadow: inset 0 0 0 1px var(--primary-color);
+}
+.at-intent-card.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
+.at-intent-card.disabled:hover { background: transparent; }
+.at-intent-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--text-secondary);
+}
+.at-intent-card.selected .at-intent-icon,
+.at-intent-card.expanded .at-intent-icon { color: var(--primary-color); }
+.at-intent-icon svg { width: 20px !important; height: 20px !important; display: block !important; }
+.at-intent-label {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.at-intent-card.selected .at-intent-label,
+.at-intent-card.expanded .at-intent-label { color: var(--primary-color); }
+
+.at-subscope-panel {
+  margin: 4px 6px 16px;
+  padding: 10px 10px 8px;
+  border-radius: 0;
+  border-left: 2px solid var(--primary-color);
+  background: var(--surface-hover);
+}
+.at-subscope-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.at-subscope-chip {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.12s var(--ease);
+}
+.at-subscope-chip:hover { background: var(--surface-hover); }
+.at-subscope-chip.selected {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: #fff;
+}
+.at-subscope-chip.disabled { opacity: 0.4; cursor: not-allowed; }
+
+.at-modifier-wrap { margin-top: 6px; }
+.at-modifier-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 6px 6px;
+}
+.at-modifier-chip {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px dashed var(--border-color);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.12s var(--ease);
+}
+.at-modifier-chip:hover { background: var(--surface-hover); }
+.at-modifier-chip.selected {
+  background: rgba(16,185,129,0.12);
+  border: 1px solid #10b981;
+  color: #0f6e56;
+}
+.dark .at-modifier-chip.selected {
+  background: rgba(16,185,129,0.16);
+  color: #5deac0;
+}
+.at-modifier-chip.disabled { opacity: 0.4; cursor: not-allowed; }
+
+.dark .at-command-search-input { background: var(--surface-color); color: var(--text-primary); }
+.dark .at-intent-card:hover,
+.dark .at-subscope-chip:hover,
+.dark .at-modifier-chip:hover { background: rgba(143, 130, 255, 0.09); }
+.dark .at-intent-card.selected,
+.dark .at-intent-card.expanded {
+  background: rgba(143, 130, 255, 0.14);
+}
+.dark .at-subscope-panel { background: rgba(143, 130, 255, 0.08); }
+
 .at-question-count-control {
   display:inline-flex;
   align-items:center;
@@ -2227,6 +2429,24 @@ html.dark #active-model-select option,
   background: #fff !important;
   border: 1px solid #000 !important;
   color: #000 !important;
+}
+/* PHOTOCOPY-STANDARD callout boxes — matches the same design used in the
+   exported PDF (pdf-export.js). The background is already forced to white
+   further down (.photocopy-mode .doc-page-canvas .block-example etc.),
+   but nothing previously touched the colored LEFT BORDER (still green/
+   blue/red/orange/pink) — leaving a white box with a colored stripe,
+   which is still relying on color/hue to tell callout types apart. Real
+   black-and-white textbooks use typography instead: a plain white box, a
+   firm black rule, and the bold label already written inside each one
+   ("Definition:", "Example:", ...) doing the work color used to do. */
+.photocopy-mode .doc-page-canvas .block-example,
+.photocopy-mode .doc-page-canvas .block-definition,
+.photocopy-mode .doc-page-canvas .block-warning,
+.photocopy-mode .doc-page-canvas .block-important,
+.photocopy-mode .doc-page-canvas .block-note {
+  border: 1px solid #000 !important;
+  border-left: 3.5px solid #000 !important;
+  border-radius: 0 !important;
 }
 .photocopy-mode .sol-label,
 .photocopy-mode .math-step-label {
@@ -3860,8 +4080,7 @@ html.dark .ai-model-card.active,
      the winning declaration further down (search "48px) !important") —
      this used to be redefined 3 times with different !important values. */
   #main-container { min-width: 0 !important; width: 100% !important; min-height: 0 !important; }
-  #mobile-nav-bar { display: flex !important; position: relative; top: 0; z-index: 90; min-height: 44px; height: 44px; }
-  .mobile-nav-btn { padding: 10px 8px; font-size: 0.82rem; min-height: 40px; }
+  #mobile-nav-bar { display: flex !important; position: relative; top: 0; z-index: 90; }
   .mobile-nav-more-btn {
     flex: 0 0 44px;
     width: 44px;
@@ -3880,21 +4099,20 @@ html.dark .ai-model-card.active,
   .mobile-view-pdf #sidebar { display: none !important; }
   .mobile-view-pdf #preview-panel { display: flex !important; flex: 1 !important; }
 
-  #chat-history { padding: 14px 12px; gap: 12px; flex: 1 1 auto; }
-  .chat-empty-state { max-width: 90%; padding: 18px 12px; }
-  .chat-empty-icon { width: 46px; height: 46px; margin-bottom: 10px; }
-  .chat-empty-icon svg { width: 21px; height: 21px; }
-  .chat-empty-title { font-size: 0.98rem; }
-  .chat-empty-desc { font-size: 0.82rem; }
-  .chat-empty-suggestions { margin-top: 14px; gap: 6px; }
-  .chat-suggestion-chip { font-size: 0.74rem; padding: 8px 12px; }
-  .chat-message { max-width: 92%; font-size: 0.92rem; padding: 10px 13px; }
+  /* .mobile-nav-btn / #chat-history / .chat-empty-* / .chat-suggestion-chip /
+     .chat-message / #active-model-select sizing consolidated into one fluid,
+     clamp()-based block — see "MOBILE FLUID SIZING" near the end of this
+     file. These used to be redefined with fixed px values across 6+
+     scattered @media blocks (850/520/380px breakpoints), which is why
+     spacing/text jumped abruptly between phone sizes instead of scaling
+     smoothly, and why in-between widths (360, 393, 412, 414, 430px — most
+     real phones) never got values actually tuned for them. */
+  #chat-history { flex: 1 1 auto; }
   /* #chat-form / #chat-input-textarea / .icon-btn sizing consolidated into
      a single block, see "CHAT INPUT ROW (consolidated)" near the end of
      this file — this used to be one of 8 scattered, conflicting copies. */
   #chat-model-bar { padding: 0 !important; margin-left: 4px !important; gap: 4px !important; }
   #chat-model-bar-icon { font-size: 0.72rem !important; }
-  #active-model-select { height: 26px !important; padding: 2px 6px !important; font-size: 0.72rem !important; width: max-content !important; min-width: 150px !important; max-width: none !important; }
 
   #topbar { padding: 0 10px; gap: 6px; overflow-x: auto; overflow-y: visible; position: relative; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   #topbar::-webkit-scrollbar { display: none; }
@@ -3936,15 +4154,75 @@ html.dark .ai-model-card.active,
   #at-command-menu-backdrop.open { display: block; position: fixed; inset: 0; background: rgba(10, 11, 20, 0.45); z-index: 205; }
   @keyframes atSheetSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
   .at-command-item { padding: 12px 10px; }
+  /* Drag-handle affordance — the small pill every native bottom sheet shows
+     at its top edge as a visual "this slides/can be swiped" cue. Purely
+     decorative (no swipe-to-dismiss gesture is wired up), but it's what
+     tells the eye "this is a sheet, not just a squished dialog". Shared by
+     every mobile bottom-sheet surface below. */
+  #at-command-menu::before,
+  #edit-page-modal .modal-card::before,
+  #page-range-modal .modal-card::before,
+  .ai-models-modal-card::before {
+    content: '';
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--border-color);
+    opacity: 0.85;
+  }
 
-  /* AI Models Modal Mobile */
-  .ai-models-modal-card { max-width: 98vw; border-radius: 18px; }
+  /* AI Models Modal Mobile — bottom sheet, matching #at-command-menu's
+     established pattern (full-width, top corners only, slide up) instead
+     of a centered dialog that was just a narrower copy of the desktop one. */
+  #ai-models-modal { align-items: flex-end !important; padding: 0 !important; }
+  .ai-models-modal-card {
+    position: relative;
+    max-width: 100%;
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 88vh;
+    padding-top: 6px;
+    padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+    animation: atSheetSlideUp 0.22s var(--ease);
+  }
   .ai-model-card { grid-template-columns: auto auto minmax(0,1fr); }
   .ai-model-card-actions { grid-column: 3; justify-content:flex-end; margin-top:4px; }
   .ai-model-form-grid { grid-template-columns:1fr; }
   .ai-field-full { grid-column:auto; }
   .ai-model-card-actions .label-desktop { display:none; }
-  .ai-models-modal-header { padding: 14px 16px; }
+  .ai-models-modal-header { padding: 18px 16px 14px; }
+
+  /* Edit-page / page-range modals — same bottom-sheet treatment, and
+     comfortable (44px) touch targets for their inputs/buttons instead of
+     the desktop-sized ones. */
+  #edit-page-modal,
+  #page-range-modal {
+    align-items: flex-end;
+    padding: 0;
+  }
+  #edit-page-modal .modal-card,
+  #page-range-modal .modal-card {
+    position: relative;
+    max-width: 100%;
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    padding: 24px 18px max(20px, env(safe-area-inset-bottom, 20px));
+    animation: atSheetSlideUp 0.22s var(--ease);
+  }
+  #edit-page-modal input,
+  #page-range-modal .range-inputs input {
+    min-height: 44px;
+    font-size: 16px; /* stops iOS Safari auto-zooming the page on focus */
+  }
+  #edit-page-modal .modal-actions button,
+  #page-range-modal .modal-actions button,
+  #page-range-modal .range-presets button {
+    min-height: 44px;
+  }
 }
 
 @media (max-width: 420px) {
@@ -4079,10 +4357,8 @@ html.dark .ai-model-card.active,
   #main-container { min-height: 0; min-width: 0 !important; flex: 1 1 auto; }
   #sidebar, #preview-panel, #preview-content-area, #document-view-container, #pdf-view-container { min-height: 0 !important; }
   #chat-history, #document-view-container, #pdf-view-container { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
-  #chat-history { padding: 12px 10px; gap: 10px; scroll-padding-bottom: 12px; }
-  .chat-message { max-width: min(94%, 760px); font-size: .91rem; line-height: 1.5; padding: 10px 12px; }
+  #chat-history { scroll-padding-bottom: 12px; }
   #chat-model-bar { min-width: 0; flex: 0 0 auto; overflow: visible; display: none !important; }
-  #active-model-select { width: max-content !important; min-width: 150px !important; max-width: none !important; overflow: visible; text-overflow: clip; }
   #preview-panel { background: #e5e7eb; }
   #preview-tabs { position: relative; z-index: 4; flex: 0 0 42px; padding: 4px 6px 0; }
   #preview-tabs .tab-btn { min-height: 38px; padding: 8px 10px; flex: 1 1 0; }
@@ -4098,28 +4374,49 @@ html.dark .ai-model-card.active,
   .pdf-preview-loading-card { width: min(330px, calc(100vw - 28px)); padding: 22px 18px; border-radius: 16px; }
   .pdf-preview-loading-title { font-size: .94rem; }
   .pdf-preview-loading-status { max-width: 260px; font-size: .76rem; }
-  button, .tool-btn, .tab-btn, .mobile-nav-btn, .at-command-item, .at-command-category, .at-command-subcategory, .icon-btn, .topbar-btn { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  button, .tool-btn, .tab-btn, .mobile-nav-btn, .at-command-item, .at-command-category, .at-command-subcategory, .icon-btn, .topbar-btn, .chat-suggestion-chip, .chat-message-action { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   #topbar, #tab-bar, #mobile-nav-bar, #editor-toolbar, #preview-tabs, #at-command-menu { user-select: none; -webkit-user-select: none; }
   #at-command-menu { max-height: min(72vh, 560px) !important; max-height: min(calc(var(--mobile-vh) - 72px), 560px) !important; padding-bottom: max(10px, env(safe-area-inset-bottom, 10px)) !important; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   #at-command-menu-backdrop { touch-action: none; }
+  /* The command sheet's own max-height (72vh-ish, since it needs room for a
+     long list of commands) can reach tall enough that its top edge lands
+     above #mobile-nav-bar — the AI Chat / Editor tab row — so the two
+     visually overlap. Hiding the row while the sheet is open is simpler
+     and more robust than trying to keep shrinking the sheet to always
+     clear it: it's not usable while the sheet covers the screen anyway. */
+  body:has(#at-command-menu.open) #mobile-nav-bar { display: none !important; }
   .at-command-item { min-height: 48px; }
   .at-question-count-control input { min-height: 34px; width: 68px; font-size: 16px !important; }
   #topbar, #tab-bar, #sidebar, #preview-panel, .chat-message, .progress-card { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+
+  /* Touch feedback: hover styles don't give a phone screen any tactile
+     response to a tap (touch devices fire :hover on tap and it just
+     lingers, it doesn't press-and-release like a real button), which is
+     why these still felt unresponsive even after everything else was
+     properly sized. Every remaining tap target that had no :active state
+     gets one here — instant, subtle, and consistent with the scale/
+     translateY language already used elsewhere in this file (e.g.
+     .icon-btn.primary:active, .topbar-btn:active). */
+  .mobile-nav-btn:active { transform: scale(0.96); }
+  .tab-btn:active,
+  #preview-tabs .tab-btn:active { transform: scale(0.97); background: var(--surface-hover); }
+  .tool-btn:active { transform: scale(0.92); background: var(--surface-hover); }
+  .icon-btn:active { transform: scale(0.93); }
+  .at-command-item:active { background: var(--surface-hover); transform: scale(0.985); }
+  .chat-suggestion-chip:active { transform: translateY(0) scale(0.96); }
+  .chat-message-action:active { transform: scale(0.92); }
+  .color-btn-container:active,
+  #editor-toolbar .tool-select:active { transform: scale(0.96); }
 }
 
 @media (max-width: 520px) {
   #chat-model-bar-icon { display: none; }
-  #active-model-select { width: max-content !important; min-width: 150px !important; max-width: none !important; font-size: .68rem !important; }
-  .mobile-nav-btn { font-size: .78rem; min-height: 38px; }
   .tab-btn { font-size: .78rem; }
 }
 
 @media (max-width: 380px) {
-  #active-model-select { display: block; width: max-content !important; min-width: 150px !important; max-width: none !important; }
   #chat-model-bar { margin-left: 0 !important; }
-  .chat-message { max-width: 96%; }
   #preview-tabs .tab-btn { padding-left: 7px; padding-right: 7px; }
-  .chat-suggestion-chip { font-size: 0.7rem; padding: 7px 10px; }
 }
 
 @media (hover: none) and (pointer: coarse) {
@@ -4730,13 +5027,11 @@ html.dark .ai-model-card.active,
   #chat-history, #attachment-bar, #at-command-chips,
   #preview-content-area, #document-view-container, #pdf-view-container { min-width:0 !important; max-width:100% !important; }
   #chat-model-bar { min-width:0 !important; max-width:100% !important; overflow:hidden !important; }
-  #active-model-select {
-    min-width:0 !important;
-    width:100% !important;
-    max-width:100% !important;
-    overflow:hidden !important;
-    text-overflow:ellipsis !important;
-  }
+  /* #active-model-select sizing consolidated — see "MOBILE FLUID SIZING"
+     near the end of this file. This rule (width:100%+ellipsis) was already
+     dead code: the !important rules elsewhere in this file (max-content,
+     no truncation) always won over it regardless of source order, since
+     this one wasn't marked !important. */
   #pdf-view-container { overflow-x:hidden !important; }
   .doc-page-canvas {
     max-width: none !important;
@@ -4744,7 +5039,6 @@ html.dark .ai-model-card.active,
   #editor-toolbar { max-width:100% !important; overflow-x:auto !important; flex-wrap:nowrap !important; }
   #editor-toolbar > * { flex:0 0 auto !important; }
   #preview-tabs { max-width:100% !important; overflow:hidden !important; }
-  #at-command-menu { max-width:calc(100vw - 20px) !important; left:10px !important; right:10px !important; }
   img, svg, video, canvas, iframe { max-width:100%; }
 }
 @media screen and (max-width:380px) {
@@ -4816,14 +5110,10 @@ html.dark .ai-model-card.active,
   }
   .tab-item .tab-close { width:22px !important; height:22px !important; min-width:22px !important; }
   #tab-new-btn { width:30px !important; height:30px !important; font-size:1rem !important; }
+  /* .mobile-nav-btn fluid sizing — see "MOBILE FLUID SIZING" further down. */
   #mobile-nav-bar {
     min-height:48px !important;
     padding:6px 9px max(6px, env(safe-area-inset-bottom, 6px)) 9px !important;
-  }
-  .mobile-nav-btn {
-    min-height:42px !important;
-    padding:9px 10px !important;
-    font-size:.86rem !important;
   }
   #main-container {
     /* Subtracting env(safe-area-inset-bottom) here means the container's
@@ -4856,9 +5146,8 @@ html.dark .ai-model-card.active,
   }
   #editor-toolbar .tool-select { min-height:38px !important; font-size:.86rem !important; }
   .color-btn-container { width:38px !important; height:36px !important; }
-  #chat-history { padding:14px 12px !important; gap:11px !important; }
-  .chat-message { font-size:.94rem !important; line-height:1.52 !important; padding:11px 13px !important; }
-  #active-model-select { font-size:.78rem !important; min-height:30px !important; }
+  /* #chat-history / .chat-message / #active-model-select fluid sizing —
+     see "MOBILE FLUID SIZING" further down this file. */
   #at-command-menu {
     font-size:.9rem !important;
     max-height:min(calc(var(--mobile-vh) - 84px),600px) !important;
@@ -4871,12 +5160,65 @@ html.dark .ai-model-card.active,
   #document-view-container { padding:12px 6px 24px !important; }
   #pdf-view-container { padding:8px 5px max(14px,env(safe-area-inset-bottom,14px)) !important; }
 }
-@media (max-width:520px) {
-  .mobile-nav-btn { font-size:.84rem !important; }
-}
 @media (max-width:380px) {
-  .mobile-nav-btn { font-size:.82rem !important; padding-left:8px !important; padding-right:8px !important; }
   .tab-item { font-size:.7rem !important; }
+}
+
+/* ============================================================
+   MOBILE FLUID SIZING
+   .mobile-nav-btn / #chat-history / .chat-empty-* / .chat-suggestion-chip /
+   .chat-message / #active-model-select used to be redefined with fixed px
+   values across 6+ scattered @media blocks (850/520/380px), each a small
+   step down from the last. That produces abrupt jumps in spacing/text size
+   exactly at those three widths and nothing tuned for the phone widths in
+   between (360, 393, 412, 414, 430px — where most real phones actually
+   land), which is what made the panel feel patched-together rather than
+   designed. clamp(min, preferred, max) scales each value continuously with
+   the viewport instead, so it reads the same "cared about" way at every
+   width from a small phone up to the tablet/desktop handoff at 850px —
+   this is now the single source of truth for all of them. */
+@media (max-width: 850px) {
+  .mobile-nav-btn {
+    min-height: 42px;
+    padding: clamp(8px, 2.2vw, 9px) clamp(8px, 2.6vw, 10px);
+    font-size: clamp(0.8rem, 2.5vw + 0.4rem, 0.86rem);
+  }
+  #chat-history {
+    padding: clamp(12px, 3.4vw, 15px) clamp(10px, 3vw, 13px);
+    gap: clamp(10px, 2.6vw, 12px);
+  }
+  .chat-empty-state {
+    max-width: min(92%, 320px);
+    padding: clamp(16px, 5vw, 22px) clamp(12px, 4vw, 18px);
+  }
+  .chat-empty-icon {
+    width: clamp(44px, 12vw, 52px);
+    height: clamp(44px, 12vw, 52px);
+    margin-bottom: clamp(10px, 3vw, 14px);
+    background: radial-gradient(circle at 32% 28%, rgba(139, 92, 246, 0.20), rgba(87, 81, 232, 0.12) 70%);
+    box-shadow: 0 6px 18px -10px rgba(87, 81, 232, 0.45);
+  }
+  .chat-empty-icon svg { width: clamp(20px, 5vw, 24px); height: clamp(20px, 5vw, 24px); }
+  .chat-empty-title { font-size: clamp(0.96rem, 3.2vw + 0.3rem, 1.05rem); }
+  .chat-empty-desc { font-size: clamp(0.8rem, 2.6vw + 0.3rem, 0.85rem); }
+  .chat-empty-suggestions { margin-top: clamp(14px, 4vw, 18px); gap: clamp(6px, 2vw, 8px); }
+  .chat-suggestion-chip {
+    font-size: clamp(0.7rem, 2.2vw + 0.2rem, 0.8rem);
+    padding: clamp(7px, 2.2vw, 9px) clamp(10px, 3vw, 14px);
+  }
+  .chat-message {
+    max-width: min(94%, 760px);
+    font-size: clamp(0.88rem, 2.4vw + 0.4rem, 0.94rem);
+    line-height: 1.54;
+    padding: clamp(10px, 3vw, 11px) clamp(12px, 3.6vw, 13px) clamp(9px, 2.8vw, 11px);
+  }
+  #active-model-select {
+    width: max-content !important;
+    min-width: 150px !important;
+    max-width: none !important;
+    font-size: clamp(0.7rem, 2vw + 0.3rem, 0.78rem) !important;
+    min-height: 30px !important;
+  }
 }
 
 /* ============================================================
