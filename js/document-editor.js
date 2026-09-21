@@ -137,9 +137,9 @@ function _fillBlankSolePageWithCoverPlaceholder() {
   page.innerHTML = `
     <div style="min-height:900px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:'Times New Roman',Georgia,serif;color:#111827;">
       <p style="font-size:14pt;margin:0 0 10px;">Created by Tamim Hossen Emon</p>
-      <p style="font-size:13pt;margin:0 0 10px;">Department of statistics and Data science</p>
+      <p style="font-size:13pt;margin:0 0 10px;">Department of Statistics and Data Science</p>
       <p style="font-size:13pt;margin:0 0 10px;">Session:2025-2026</p>
-      <p style="font-size:13pt;margin:0;">Islamic Univeersity,Kushtia</p>
+      <p style="font-size:13pt;margin:0;">Islamic University,Kushtia</p>
     </div>`;
 }
 
