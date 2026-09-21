@@ -283,11 +283,6 @@
           </span>
           <div class="chat-empty-title">AI Chat</div>
           <div class="chat-empty-desc">Ask the AI to create notes, generate a PDF, or edit this document. Type below to get started.</div>
-          <div class="chat-empty-suggestions">
-            <button type="button" class="chat-suggestion-chip" onclick="fillChatSuggestion(this)">📝 নোট তৈরি করো</button>
-            <button type="button" class="chat-suggestion-chip" onclick="fillChatSuggestion(this)">❓ MCQ কুইজ বানাও</button>
-            <button type="button" class="chat-suggestion-chip" onclick="fillChatSuggestion(this)">📄 এই ডকুমেন্ট থেকে PDF বানাও</button>
-          </div>
         </div>
       </div>
       <div id="attachment-bar"></div>
@@ -373,9 +368,12 @@
         <button class="mobile-back-to-chat-btn" id="mobile-back-to-chat-btn" type="button" onclick="setMobileView('chat')">← AI Chat</button>
         <div id="document-view-container">
           <div class="doc-page-canvas" contenteditable="true" spellcheck="false" oninput="handleCanvasInput(event)" onkeydown="handlePageKeydown(event)">
-            <h1 style="text-align: center; margin-top: 30%; color: #9ca3af; font-family: 'Inter', sans-serif; font-weight:400;">Start typing here...<br>
-              <span style="font-size: 14pt;">Or ask AI on the left to generate notes, MCQ Quizzes, or charts!</span>
-            </h1>
+            <div style="min-height:900px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:'Times New Roman',Georgia,serif;color:#111827;">
+              <p style="font-size:14pt;margin:0 0 10px;">Created by Tamim Hossen Emon</p>
+              <p style="font-size:13pt;margin:0 0 10px;">Department of statistics and Data science</p>
+              <p style="font-size:13pt;margin:0 0 10px;">Session:2025-2026</p>
+              <p style="font-size:13pt;margin:0;">Islamic Univeersity,Kushtia</p>
+            </div>
             <div class="page-footer-number" contenteditable="false">Page 1 of 1</div>
           </div>
         </div>
@@ -706,16 +704,24 @@
        This is a pure safety net: it only acts if, after everything else
        has finished loading, #main-container still isn't in any of the
        three known mobile view states. -->
+  <!-- ===== PROGRESS OVERLAY INITIAL-STATE FALLBACK =====
+       #global-progress-overlay (the "Working..." card with the rotating
+       Bengali quotes and "ফাইল প্রসেসিং" file-processing label) is
+       display:none in CSS by default and is only meant to appear once a
+       PDF-generation call is actually running, toggled on via inline
+       style by app.js. On a fresh page load nothing has started generating
+       yet, so there's no legitimate reason for it to be visible — if it
+       ever is (a stray inline style, a state-restore path that resumed an
+       interrupted previous session's "generating" flag, or anything
+       upstream throwing before it gets a chance to hide things), it sits
+       on top of the AI Chat panel as unexplained Bengali text. This forces
+       it back to hidden once on load; it never runs again afterward, so it
+       can't interfere with a real, legitimately-triggered generation. -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       try {
-        if (typeof isMobileDeviceLayout !== 'function' || !isMobileDeviceLayout()) return;
-        var container = document.getElementById('main-container');
-        if (!container) return;
-        var cls = container.className || '';
-        if (!/\bmobile-view-(chat|editor|pdf)\b/.test(cls) && typeof setMobileView === 'function') {
-          setMobileView('chat');
-        }
+        var overlay = document.getElementById('global-progress-overlay');
+        if (overlay) overlay.style.display = 'none';
       } catch (_) {}
     });
   </script>
