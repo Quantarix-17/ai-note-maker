@@ -19,6 +19,26 @@ function loadAIModelsState() {
       }
     }
   } catch (e) { console.error('Failed to load AI models state:', e); }
+  _applyDailyModelReset();
+}
+
+// ===== DAILY RESET TO FIRST MODEL =====
+// Whichever model the last request happened to land on (after failover
+// through the list) otherwise stays active indefinitely. The first time
+// the app is opened on a new local calendar day (i.e. any time after
+// midnight that day), this jumps the active model back to the first one
+// in the saved list — once per day, not on every load, so switching
+// models by hand during the day isn't fought.
+const AI_MODEL_DAILY_RESET_KEY = 'aiModelDailyResetDate_v1';
+function _applyDailyModelReset() {
+  try {
+    if (!AI_MODELS_STATE.models.length) return;
+    const todayStr = new Date().toDateString();
+    if (localStorage.getItem(AI_MODEL_DAILY_RESET_KEY) === todayStr) return;
+    AI_MODELS_STATE.activeModelId = AI_MODELS_STATE.models[0].id;
+    localStorage.setItem(AI_MODEL_DAILY_RESET_KEY, todayStr);
+    saveAIModelsState();
+  } catch (_) { /* best-effort only */ }
 }
 
 function saveAIModelsState() {
