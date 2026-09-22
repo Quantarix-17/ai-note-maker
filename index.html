@@ -322,9 +322,6 @@
           <button class="tool-btn" onclick="HISTORY.redo()" title="Redo">↪</button>
           <button class="tool-btn" onclick="executeEditorCommand('removeFormat')">✕</button>
           <button class="tool-btn" onclick="paginateDocumentCanvas()">Paginate</button>
-          <button class="tool-btn" onclick="beautifyDocument()">
-            <span class="ui-icon"><svg viewBox="0 0 24 24"><path d="m12 3 1.2 4.1L17 8.5l-3.8 1.4L12 14l-1.2-4.1L7 8.5l3.8-1.4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span> Beautify
-          </button>
         </div>
         <div class="tool-group">
           <button class="tool-btn" onclick="addPageAfterCurrent()">Add Page</button>
@@ -344,13 +341,15 @@
             <option value="5">Heading 2</option>
             <option value="6">Heading 1</option>
           </select>
+          <button class="tool-btn" onclick="decreaseSelectedFontSize()" title="Decrease font size (click repeatedly to keep shrinking)">A−</button>
+          <button class="tool-btn" onclick="increaseSelectedFontSize()" title="Increase font size (click repeatedly to keep growing)">A+</button>
         </div>
         <div class="tool-group">
           <button class="tool-btn" id="btn-bold" onclick="executeEditorCommand('bold')"><b>B</b></button>
           <button class="tool-btn" id="btn-italic" onclick="executeEditorCommand('italic')"><i>I</i></button>
           <button class="tool-btn" id="btn-underline" onclick="executeEditorCommand('underline')"><u>U</u></button>
-          <div class="color-btn-container" title="Text Color"><span>A</span><input type="color" onchange="executeEditorCommand('foreColor', this.value)"></div>
-          <div class="color-btn-container" title="Highlight Color" style="background:#fef08a;"><span></span><input type="color" value="#ffff00" onchange="executeEditorCommand('hiliteColor', this.value)"></div>
+          <div class="color-btn-container" title="Text Color"><span>A</span><input type="color" onmousedown="saveEditorSelectionForColorPicker()" onchange="applyColorCommand('foreColor', this.value)"></div>
+          <div class="color-btn-container" title="Highlight Color" style="background:#fef08a;"><span></span><input type="color" value="#ffff00" onmousedown="saveEditorSelectionForColorPicker()" onchange="applyColorCommand('hiliteColor', this.value)"></div>
         </div>
         <div class="tool-group">
           <button class="tool-btn" id="btn-justifyLeft" onclick="executeEditorCommand('justifyLeft')">⫷</button>
