@@ -638,23 +638,12 @@ async function callAIAPI(messages, opts = {}) {
         console.warn(`[@Thinking] Cycle ${cycle}/${maxCycles}: "${cfg.name}" failed:`, err);
         if (!autoSwitch) { throw err; }
 
-        if (modelIndex > 0) {
-          const previousCfg = models[modelIndex - 1];
-          const previousHealth = await probeAIModelHealth(previousCfg);
-          if (previousHealth?.ok) {
-            if (typeof switchActiveModelTo === 'function') {
-              switchActiveModelTo(previousCfg, cfg);
-            }
-            if (typeof displayToastNotification === 'function') {
-              displayToastNotification(`⚠️ "${cfg.name}" ${describeAIErrorForToast(err)} — previous model "${previousCfg.name}" is still healthy, so the request is sent back to that model.`);
-            }
-            throw err;
-          }
-          if (typeof displayToastNotification === 'function') {
-            displayToastNotification(`⚠️ "${cfg.name}" ${describeAIErrorForToast(err)} — previous model "${previousCfg.name}" probe failed, trying "${models[modelIndex + 1]?.name || 'next configured model'}"`);
-          }
-        }
-
+        // Always move forward to the next model in sequence on failure —
+        // this used to probe the PREVIOUS model and jump back to it if
+        // healthy, which could bounce a single request back and forth
+        // between two models instead of steadily working through the full
+        // list. The for-loop below already advances to modelIndex + 1 on
+        // its own; nothing here needs to force that.
         if (modelIndex < models.length - 1) {
           if (typeof displayToastNotification === 'function') {
             displayToastNotification(`⚠️ "${cfg.name}" ${describeAIErrorForToast(err)} — trying "${models[modelIndex + 1].name}"`);
