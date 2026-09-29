@@ -759,31 +759,33 @@
   <!-- ===== MOBILE VIEWPORT SYNC ===== -->
   <script>
     (function installMobileViewportSync() {
-      function sync() {
+      var lastH = 0, lastKb = null, raf = 0;
+      function apply() {
+        raf = 0;
         try {
           if (!window.visualViewport || !(typeof isMobileDeviceLayout === 'function' ? isMobileDeviceLayout() : false)) return;
-          const vv = window.visualViewport;
-          const height = Math.max(320, Math.round(vv.height || window.innerHeight || 0));
-          document.documentElement.style.setProperty('--mobile-vh', height + 'px');
-          document.documentElement.classList.toggle('kb-open', (window.innerHeight || 0) - (vv.height || 0) > 140);
+          var vv = window.visualViewport;
+          var height = Math.max(320, Math.round(vv.height || window.innerHeight || 0));
+          // Only touch the DOM when the value really changed (>=2px): writing the
+          // same/near-same height every frame made the whole layout shimmer.
+          if (Math.abs(height - lastH) >= 2) {
+            lastH = height;
+            document.documentElement.style.setProperty('--mobile-vh', height + 'px');
+          }
+          var kb = (window.innerHeight || 0) - (vv.height || 0) > 140;
+          if (kb !== lastKb) { lastKb = kb; document.documentElement.classList.toggle('kb-open', kb); }
         } catch (_) {}
       }
-      sync();
+      function sync() { if (!raf) raf = requestAnimationFrame(apply); }
+      apply();
       window.addEventListener('resize', sync, { passive: true });
       window.addEventListener('orientationchange', function() { setTimeout(sync, 120); }, { passive: true });
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', sync, { passive: true });
-        window.visualViewport.addEventListener('scroll', sync, { passive: true });
-      }
-      document.addEventListener('visibilitychange', function() {
-        if (!document.hidden) { sync();
-          setTimeout(sync, 250); }
-      }, { passive: true });
-      window.addEventListener('pageshow', function() { sync();
-        setTimeout(sync, 250); }, { passive: true });
-      window.addEventListener('focus', function() { sync();
-        setTimeout(sync, 250); }, { passive: true });
-      window.__resyncMobileViewportHeight = sync;
+      // NOTE: deliberately NOT listening to visualViewport 'scroll' — it fires
+      // continuously while panning and fought the browser, causing jitter.
+      if (window.visualViewport) window.visualViewport.addEventListener('resize', sync, { passive: true });
+      document.addEventListener('visibilitychange', function() { if (!document.hidden) { sync(); setTimeout(sync, 250); } }, { passive: true });
+      window.addEventListener('pageshow', function() { sync(); setTimeout(sync, 250); }, { passive: true });
+      window.__resyncMobileViewportHeight = apply;
     })();
   </script>
 
