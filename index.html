@@ -764,6 +764,7 @@
           const vv = window.visualViewport;
           const height = Math.max(320, Math.round(vv.height || window.innerHeight || 0));
           document.documentElement.style.setProperty('--mobile-vh', height + 'px');
+          document.documentElement.classList.toggle('kb-open', (window.innerHeight || 0) - (vv.height || 0) > 140);
         } catch (_) {}
       }
       sync();
