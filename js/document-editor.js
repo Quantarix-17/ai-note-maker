@@ -2967,7 +2967,7 @@ function applyMonochromeDocumentStyles() {
     });
 
     // block-solution / math-final-answer / sol-label should read as plain
-    // text with just a black left rule in monochrome (see styles.css),
+    // text (no box, no side border) in monochrome (see styles.css),
     // not a boxed white rectangle — clear any leftover inline background
     // or border so the stylesheet rule is what actually applies.
     page.querySelectorAll('.block-solution, .math-final-answer, .sol-label').forEach(el => {
