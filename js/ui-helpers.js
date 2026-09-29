@@ -1083,22 +1083,36 @@ function switchPreviewTabDesktop(view) {
 }
 
 function setMobileView(viewName) {
-  const safeView = (viewName === 'editor' || viewName === 'pdf' || viewName === 'chat') ? viewName : 'chat';
+  // FIX: 'slides' was not a known view, and only chat/editor/pdf classes were
+  // removed. After a slide deck / Slide Deck mode switched main-container to
+  // "mobile-view-slides", tapping "AI Chat" ADDED mobile-view-chat but left
+  // mobile-view-slides in place; the later CSS rule (slides hides #sidebar)
+  // won, so the chat input disappeared and could not be brought back.
+  const MOBILE_VIEWS = ['chat', 'editor', 'pdf', 'slides'];
+  let safeView = MOBILE_VIEWS.includes(viewName) ? viewName : 'chat';
+  const deck = (typeof APP_STATE !== 'undefined') ? APP_STATE.slideDeck : null;
+  const hasDeck = !!(deck && Array.isArray(deck.slides) && deck.slides.length);
+  if (safeView === 'editor' && hasDeck) safeView = 'slides';
   if (typeof APP_STATE !== 'undefined') APP_STATE.currentMobileView = safeView;
   const main = document.getElementById('main-container');
   if (!main) return;
-  main.classList.remove('mobile-view-chat', 'mobile-view-editor', 'mobile-view-pdf');
-  main.classList.add('mobile-view-' + safeView);
-  document.querySelectorAll('.mobile-nav-btn').forEach(btn => btn.classList.remove('active'));
-  const activeBtn = document.getElementById('mob-btn-' + safeView);
-  if (activeBtn) activeBtn.classList.add('active');
+  const applyClass = () => {
+    MOBILE_VIEWS.forEach(v => main.classList.remove('mobile-view-' + v));
+    main.classList.add('mobile-view-' + safeView);
+    // Slides and the A4 editor share the "Editor" nav button.
+    const navId = (safeView === 'slides') ? 'editor' : safeView;
+    document.querySelectorAll('.mobile-nav-btn').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.getElementById('mob-btn-' + navId);
+    if (activeBtn) activeBtn.classList.add('active');
+  };
+  applyClass();
 
   const backBtn = document.getElementById('mobile-back-to-chat-btn');
-  if (backBtn) backBtn.style.display = (safeView === 'editor') ? 'inline-flex' : 'none';
+  if (backBtn) backBtn.style.display = (safeView === 'chat') ? 'none' : 'inline-flex';
 
-  if (safeView === 'pdf') {
-    if (typeof switchPreviewTab === 'function') switchPreviewTab('pdf');
-  } else if (viewName === 'editor') {
+  if (safeView === 'pdf' || safeView === 'slides') {
+    if (typeof switchPreviewTab === 'function') switchPreviewTab(safeView);
+  } else if (safeView === 'editor') {
     if (typeof switchPreviewTab === 'function') switchPreviewTab('editor');
     requestAnimationFrame(() => {
       try { if (typeof fitEditorPagesToScreen === 'function') fitEditorPagesToScreen(); } catch (_) {}
@@ -1107,10 +1121,13 @@ function setMobileView(viewName) {
       }, 200);
     });
   }
+  // switchPreviewTab rewrites the mobile-view-* class itself; re-assert ours
+  // so exactly one view class is ever present.
+  if (isMobileDeviceLayout()) applyClass();
 
   if (!isMobileDeviceLayout()) {
-    if (viewName === 'pdf') switchPreviewTabDesktop('pdf');
-    else if (viewName === 'editor') switchPreviewTabDesktop('editor');
+    if (safeView === 'pdf') switchPreviewTabDesktop('pdf');
+    else if (safeView === 'editor' || safeView === 'slides') switchPreviewTabDesktop('editor');
   }
 }
 
