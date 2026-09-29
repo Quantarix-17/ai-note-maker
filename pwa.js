@@ -3,12 +3,65 @@
 //  2) "Install" button (Android/PC) + iOS hint
 //  3) No-internet modal (offline hole sundor modal dekhay, online hole nijei soriye jay)
 (function () {
-  // ---------- 1) Service worker ----------
+  // ---------- 1) Service worker + auto update on every launch ----------
+  // Code files server theke prottek bar fresh ashe (sw.js e cache:'reload').
+  // Notun sw.js pele ekbar auto-reload hoy (session-e maximum 1 bar).
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    var hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (!hadController) return;                       // first-ever install: reload dorkar nei
+      try {
+        if (sessionStorage.getItem('pataUpdatedOnce')) return;
+        sessionStorage.setItem('pataUpdatedOnce', '1');
+      } catch (_) {}
+      location.reload();
+    });
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('sw.js').catch(function (e) { console.warn('[PWA] SW register failed', e); });
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+        reg.update().catch(function () {});
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') reg.update().catch(function () {});
+        });
+      }).catch(function (e) { console.warn('[PWA] SW register failed', e); });
     });
   }
+
+  // ---------- Theme persistence ----------
+  // Last select kora theme 'pata_theme' key-te thake; user nije na bodlale onno kichu eta bodlate pare na.
+  var THEME_KEY = 'pata_theme';
+  function readTheme() { try { var t = localStorage.getItem(THEME_KEY); return (t === 'dark' || t === 'light') ? t : null; } catch (_) { return null; } }
+  function saveTheme(t) { try { localStorage.setItem(THEME_KEY, t); } catch (_) {} }
+  function currentTheme() {
+    return (document.body && document.body.classList.contains('dark')) ? 'dark' : 'light';
+  }
+  function applySavedTheme() {
+    var t = readTheme();
+    if (!t) return;
+    var dark = t === 'dark';
+    document.documentElement.classList.toggle('dark', dark);
+    if (document.body) document.body.classList.toggle('dark', dark);
+    if (window.APP_STATE) window.APP_STATE.theme = t;
+    if (typeof window.applyCurrentTheme === 'function') { try { window.applyCurrentTheme(); } catch (_) {} }
+  }
+  // user theme button chapleই save
+  (function wrapToggle() {
+    var orig = window.toggleDarkMode;
+    if (typeof orig !== 'function' || orig.__pataWrapped) return;
+    var wrapped = function () {
+      var r = orig.apply(this, arguments);
+      saveTheme(currentTheme());
+      return r;
+    };
+    wrapped.__pataWrapped = true;
+    window.toggleDarkMode = wrapped;
+  })();
+  // prothom bar (kono saved theme nei) — bortoman theme ta save kore rakhi
+  window.addEventListener('load', function () {
+    if (!readTheme()) saveTheme(currentTheme());
+    applySavedTheme();
+    setTimeout(applySavedTheme, 400);    // app-er init pore override korle abar thik kori
+  });
+  applySavedTheme();
 
   // ---------- 2) Install button ----------
   var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
