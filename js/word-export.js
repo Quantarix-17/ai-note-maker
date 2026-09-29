@@ -73,12 +73,20 @@
     } catch (_) { return null; }
   }
   // CSS colour -> 'RRGGBB' (alpha blended over white); null when transparent
+  // Monochrome mode (body.photocopy-mode): every colour is exported as a gray.
+  function isMono() { return !!(document.body && document.body.classList.contains('photocopy-mode')); }
+  function toGray(hex) {
+    const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+    const y = Math.round(0.299 * r + 0.587 * g + 0.114 * b).toString(16).padStart(2, '0').toUpperCase();
+    return y + y + y;
+  }
+  const monoHex = (hex) => (hex && isMono()) ? toGray(hex) : hex;
   function hexColor(str) {
     if (!str || str === 'transparent') return null;
     const c = parseCssColor(str);
     if (!c || c.a <= 0.01) return null;
     const mix = (v) => Math.round(v * c.a + 255 * (1 - c.a));
-    return [mix(c.r), mix(c.g), mix(c.b)].map(v => v.toString(16).padStart(2, '0')).join('').toUpperCase();
+    return monoHex([mix(c.r), mix(c.g), mix(c.b)].map(v => v.toString(16).padStart(2, '0')).join('').toUpperCase());
   }
 
   // ---- font helpers -----------------------------------------------------
@@ -138,7 +146,7 @@
     for (let n = el; n && isEl(n); n = n.parentElement) {
       const cs = getComputedStyle(n);
       if (cs.display !== 'inline' && cs.display !== 'inline-block') break;
-      const bg = hexColor(cs.backgroundColor);
+      const bg = isMono() ? null : hexColor(cs.backgroundColor);
       if (bg) return bg;
     }
     return null;
@@ -846,7 +854,9 @@
   const NS_WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
   const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
   const xesc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  const DEFAULT_CHART_COLORS = ['4F7DF3', '22C55E', 'F59E0B', 'EF4444', 'A855F7', '06B6D4', 'EC4899', '84CC16', '6366F1', 'F97316'];
+  const DEFAULT_CHART_COLORS_RAW = ['4F7DF3', '22C55E', 'F59E0B', 'EF4444', 'A855F7', '06B6D4', 'EC4899', '84CC16', '6366F1', 'F97316'];
+  const MONO_CHART_COLORS = ['000000', '555555', '999999', 'CCCCCC', '333333', '777777', 'BBBBBB', 'DDDDDD', '444444', '888888'];
+  const DEFAULT_CHART_COLORS = new Proxy([], { get: (_, k) => (isMono() ? MONO_CHART_COLORS : DEFAULT_CHART_COLORS_RAW)[k] });
 
   // Chart.js canvases: read the live chart instance so the picture can also be
   // rebuilt as a native, editable Word chart (single-series bar/line/pie/donut).
@@ -1036,7 +1046,7 @@
     const boxes = (dg.labels || []).map((l, idx) => {
       const x = Math.round(Number(l.x) || 0), y = Math.round(Number(l.y) || 0);
       const w = Math.max(1, Math.round(Number(l.w) || 1)), h = Math.max(1, Math.round(Number(l.h) || 1));
-      const stroke = hexColor(l.strokeColor) || '9CA3AF';
+      const stroke = hexColor(l.strokeColor) || monoHex('9CA3AF');
       const fill = hexColor(l.fill) || 'FFFFFF';
       // Multi-line boxes (a title + a lighter subtitle, drawn as separate
       // .fc-node-text elements) keep each line's own color/size; single-line
@@ -1046,7 +1056,7 @@
         ? l.lines
         : [{ text: l.text, color: l.textColor, fontSize: l.fontSize }];
       const paras = lineData.filter(ln => ln && String(ln.text || '').trim()).map((ln, li) => {
-        const textColor = hexColor(ln.color) || hexColor(l.textColor) || '1F2937';
+        const textColor = hexColor(ln.color) || hexColor(l.textColor) || (isMono() ? '000000' : '1F2937');
         const szHalfPt = Math.max(12, Math.min(48, Math.round((Number(ln.fontSize) || Number(l.fontSize) || 14) * ptPerVbUnit * 2)));
         const bold = li === 0 ? 1 : 0; // first line (title) bold, any further line (subtitle) regular
         return `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="0"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="${fontN}" w:hAnsi="${fontN}" w:cs="${fontCs}"/>${bold ? '<w:b/>' : ''}<w:color w:val="${textColor}"/><w:sz w:val="${szHalfPt}"/></w:rPr><w:t xml:space="preserve">${xesc(String(ln.text))}</w:t></w:r></w:p>`;
@@ -1197,7 +1207,7 @@
       opts: {
         children: [],
         indent: ctx.indentLeft || ctx.indentRight ? { left: ctx.indentLeft, right: ctx.indentRight } : undefined,
-        border: { bottom: { style: D.BorderStyle.SINGLE, size: Math.min(96, Math.round(w * EIGHTH_PT)), color: hexColor(cs.borderTopColor) || 'CBD5E1', space: 1 } },
+        border: { bottom: { style: D.BorderStyle.SINGLE, size: Math.min(96, Math.round(w * EIGHTH_PT)), color: hexColor(cs.borderTopColor) || monoHex('CBD5E1'), space: 1 } },
         spacing: { line: 20, lineRule: D.LineRuleType.EXACT }
       }
     };
@@ -1220,7 +1230,9 @@
       top: borderSpec(cs, 'Top', 0), right: borderSpec(cs, 'Right', 0),
       bottom: borderSpec(cs, 'Bottom', 0), left: borderSpec(cs, 'Left', 0)
     };
-    const bg = hexColor(cs.backgroundColor);
+    // Monochrome: no shading and no left/right (side) borders on any block.
+    if (isMono()) { own.left = null; own.right = null; }
+    const bg = isMono() ? null : hexColor(cs.backgroundColor);
     return { bg, own, box: !!(bg || own.left || own.right) };
   }
 
@@ -1449,6 +1461,7 @@
   const nearest = (arr, v) => { let bi = 0, bd = Infinity; arr.forEach((a, i) => { const d = Math.abs(a - v); if (d < bd) { bd = d; bi = i; } }); return bi; };
 
   function cellBackground(cell) {
+    if (isMono()) return null;
     for (let n = cell; n && n.localName !== 'table'; n = n.parentElement) {
       const bg = hexColor(getComputedStyle(n).backgroundColor);
       if (bg) return bg;
@@ -1695,8 +1708,8 @@
               }
             },
             children,
-            headers: { default: new D.Header({ children: [new D.Paragraph({ alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({ text: name, size: 16, color: '888888' })] })] }) },
-            footers: { default: new D.Footer({ children: [new D.Paragraph({ alignment: D.AlignmentType.CENTER, children: [new D.TextRun({ children: [D.PageNumber.CURRENT, ' / ', D.PageNumber.TOTAL_PAGES], size: 16, color: '888888' })] })] }) }
+            headers: { default: new D.Header({ children: [new D.Paragraph({ alignment: D.AlignmentType.RIGHT, children: [new D.TextRun({ text: name, size: 16, color: isMono() ? '000000' : '888888' })] })] }) },
+            footers: { default: new D.Footer({ children: [new D.Paragraph({ alignment: D.AlignmentType.CENTER, children: [new D.TextRun({ children: [D.PageNumber.CURRENT, ' / ', D.PageNumber.TOTAL_PAGES], size: 16, color: isMono() ? '000000' : '888888' })] })] }) }
           }]
         });
         return D.Packer.toBlob(doc);
