@@ -3,7 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
-  <title>AI PDF & Word Studio - Multi‑Tab Pro • Full Unified PDF Engine</title>
+  <!-- ===== PWA: installable app ===== -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#4f7df3">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Pata AI">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="icon" type="image/png" href="icons/tamim.png">
+  <link rel="apple-touch-icon" href="icons/tamim.png">
+  <title>Pata AI</title>
 
   <!-- ===== CORE FUNCTION POLYFILLS (MUST BE IN HEAD) ===== -->
   <script>
@@ -240,7 +249,7 @@
       <span class="logo-mark ui-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M12 3.5 14 9l5.5 2-5.5 2-2 5.5-2-5.5-5.5-2 5.5-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
       </span>
-      AI Word<span>&nbsp; PDF Studio</span>
+      Pata<span>&nbsp; AI</span>
       <div id="chat-model-bar">
         <span id="chat-model-bar-icon" class="ui-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 12h8M12 8v8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -740,6 +749,9 @@
 
   <!-- 12. Main App (initialization) -->
   <script src="js/app.js"></script>
+
+  <!-- PWA: service worker + install button -->
+  <script src="pwa.js"></script>
 
   <!-- ===== MOBILE VIEWPORT SYNC ===== -->
   <script>
