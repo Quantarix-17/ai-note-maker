@@ -6288,3 +6288,118 @@ html.dark .ai-model-card.active,
 .slide-canvas-accent-bar,
 .slide-canvas-16x9.slide-canvas-title-slide::after,
 .slide-canvas-title-slide::after { display: none !important; content: none !important; }
+
+/* ========================================================================
+   MOBILE OVERHAUL (final authority) — phones / small tablets (<= 850px)
+   Fixes: page-level scroll at the bottom, cluttered top bar, chat input
+   disappearing after choosing Slides, cramped slide editor.
+   Layout model: body = fixed-height flex column
+     topbar / tab-bar / mobile-nav  (auto height)  +  #main-container (fills rest)
+   Only inner panels scroll; the page itself never does.
+   ======================================================================== */
+@media (max-width: 850px) {
+  :root { --mobile-topbar: 52px; --mobile-tabbar: 38px; --mobile-nav-height: 46px; }
+
+  /* --- No page scroll: body is exactly the visible viewport (keyboard-aware
+         via --mobile-vh which index.html keeps in sync with visualViewport) --- */
+  html { height: 100%; overflow: hidden !important; }
+  body {
+    position: fixed !important; inset: 0 auto auto 0 !important;
+    width: 100% !important; height: 100vh !important; height: var(--mobile-vh, 100dvh) !important;
+    min-height: 0 !important; overflow: hidden !important;
+    display: flex !important; flex-direction: column !important;
+    overscroll-behavior: none;
+  }
+  #topbar, #tab-bar, #mobile-nav-bar { flex: 0 0 auto !important; }
+  #main-container {
+    flex: 1 1 0 !important; height: auto !important; min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* --- Top bar: one clean row, no sideways scrolling --- */
+  #topbar {
+    height: var(--mobile-topbar) !important; min-height: var(--mobile-topbar) !important;
+    padding: 0 max(10px, env(safe-area-inset-right)) 0 max(10px, env(safe-area-inset-left)) !important;
+    gap: 8px !important; overflow: visible !important;
+    padding-top: env(safe-area-inset-top, 0px) !important;
+    box-sizing: content-box !important;
+  }
+  #topbar .logo { flex: 0 1 auto; min-width: 0; gap: 8px !important; font-size: 1.02rem !important; overflow: hidden; }
+  #topbar .logo-mark { width: 30px !important; height: 30px !important; border-radius: 9px !important; }
+  #topbar .logo-mark svg { width: 17px; height: 17px; }
+  #creation-mode-bar { margin-left: 2px !important; flex: 0 1 auto; min-width: 0; }
+  #creation-mode-bar .ui-icon { display: none !important; }
+  #creation-mode-select {
+    height: 32px; min-height: 32px !important; max-width: 128px;
+    padding: 0 26px 0 12px !important; font-size: 16px !important; /* 16px = no iOS focus-zoom */
+    text-overflow: ellipsis; background-position: calc(100% - 13px) calc(50% - 2px), calc(100% - 9px) calc(50% - 2px) !important;
+  }
+  #topbar .spacer { flex: 1 1 4px; min-width: 4px; }
+  /* "Close all tabs" (⊠) is already in the ⋮ menu — drop the cryptic duplicate */
+  #topbar-newtab-fab-btn { display: none !important; }
+  #topbar-new-fab-btn, #topbar-more-btn {
+    display: flex !important; align-items: center; justify-content: center;
+    width: 38px !important; height: 38px !important; min-width: 38px !important;
+    padding: 0 !important; margin: 0 !important; border-radius: 12px !important; flex: 0 0 auto;
+    font-size: 1.25rem !important; line-height: 1;
+  }
+  #topbar-actions {
+    top: calc(var(--mobile-topbar) + env(safe-area-inset-top, 0px) + 6px) !important;
+    left: 10px !important; right: 10px !important;
+    max-height: calc(var(--mobile-vh, 100dvh) - var(--mobile-topbar) - 24px) !important;
+    border-radius: 16px !important;
+  }
+
+  /* --- Tab bar + AI Chat / Editor switcher: compact, no bottom safe-area
+         padding (that belongs to the bottom edge, not to a top strip) --- */
+  #tab-bar { height: var(--mobile-tabbar) !important; min-height: var(--mobile-tabbar) !important; }
+  #mobile-nav-bar {
+    height: var(--mobile-nav-height) !important; min-height: var(--mobile-nav-height) !important;
+    padding: 4px 8px !important; gap: 6px !important; box-sizing: border-box !important;
+  }
+  .mobile-nav-btn { height: 38px !important; min-height: 38px !important; }
+  html.kb-open #tab-bar { display: none !important; }   /* more room while typing */
+
+  /* --- Chat panel: history scrolls, input row is pinned; the panel itself
+         never scrolls (that was the "extra scroll at the bottom") --- */
+  .mobile-view-chat #sidebar { overflow: hidden !important; height: 100% !important; }
+  #chat-history { flex: 1 1 0 !important; min-height: 0 !important; overflow-y: auto !important; overscroll-behavior: contain; }
+  #attachment-bar, #at-command-chips { flex: 0 0 auto; }
+  #chat-form {
+    position: relative !important; bottom: auto !important; flex: 0 0 auto !important;
+    padding: 8px 10px max(8px, env(safe-area-inset-bottom, 8px)) !important; gap: 6px !important;
+  }
+  html.kb-open #chat-form { padding-bottom: 8px !important; }
+  #chat-input-textarea { font-size: 16px !important; max-height: 30vh; }
+
+  /* --- Preview panels fill the remaining height; back button is redundant
+         (the nav bar above is always visible) and just ate vertical space --- */
+  #mobile-back-to-chat-btn { display: none !important; }
+  #preview-content-area { min-height: 0 !important; }
+  #document-view-container { padding-bottom: 12px !important; }
+
+  /* --- Slide editor: thumbnails become a horizontal strip, canvas gets the space --- */
+  #slide-view-container { height: 100% !important; min-height: 0; }
+  .slide-studio-body { flex-direction: column !important; min-height: 0; }
+  .slide-main-view { order: 1; flex: 1 1 0 !important; padding: 8px !important; min-height: 0; }
+  .slide-thumbnail-rail {
+    order: 2; flex: 0 0 auto !important; width: 100% !important; height: 84px;
+    flex-direction: row !important; overflow-x: auto !important; overflow-y: hidden !important;
+    padding: 6px 8px !important; gap: 8px !important;
+    border-right: 0 !important; border-top: 1px solid var(--border-color);
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .slide-thumbnail-rail::-webkit-scrollbar { display: none; }
+  .slide-thumb-row { flex: 0 0 132px !important; width: 132px; }
+  .slide-thumb { height: 100%; }
+  .slide-thumb-title { -webkit-line-clamp: 2 !important; }
+  .slide-edit-toolbar { padding: 6px 8px !important; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .slide-edit-toolbar::-webkit-scrollbar { display: none; }
+  .slide-edit-btn { height: 34px !important; min-width: 34px !important; font-size: 0.78rem !important; }
+  .slide-nav-btn { width: 34px !important; height: 34px !important; }
+  .slide-bg-picker-panel.open { max-height: 30vh; overflow-y: auto; }
+}
+@media (max-width: 360px) {
+  #topbar .logo > span:not(.logo-mark) { display: none; }   /* hide "AI" on very narrow phones */
+  #creation-mode-select { max-width: 104px; }
+}
