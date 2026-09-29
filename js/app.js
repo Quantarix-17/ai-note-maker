@@ -121,10 +121,13 @@ function _syncBlankActiveTabToCreationMode(mode) {
   tab.slideDeck = APP_STATE.slideDeck;
 
   if (typeof renderSlideDeckPreview === 'function') renderSlideDeckPreview(APP_STATE.slideDeck);
+  // FIX (mobile): remember which panel the person was on BEFORE switching the
+  // preview tab. switchPreviewTab() forces the "slides"/"editor" panel on
+  // mobile, which used to yank them out of the chat and hide the message box.
+  const _prevMobileView = APP_STATE.currentMobileView || 'chat';
   if (typeof switchPreviewTab === 'function') switchPreviewTab(mode === 'slides' ? 'slides' : 'editor');
   if (typeof isMobileDeviceLayout === 'function' && isMobileDeviceLayout()) {
-    const currentView = APP_STATE.currentMobileView || 'editor';
-    if (typeof setMobileView === 'function') setMobileView(currentView);
+    if (typeof setMobileView === 'function') setMobileView(_prevMobileView === 'chat' ? 'chat' : 'editor');
   }
   if (typeof TAB_MANAGER._persist === 'function') TAB_MANAGER._persist();
   if (typeof updateCreationModeLockUI === 'function') updateCreationModeLockUI();
