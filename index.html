@@ -6,6 +6,8 @@
   <!-- ===== PWA: installable app ===== -->
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#4f7df3">
+  <!-- Apply last-selected theme instantly (no light/dark flash on launch) -->
+  <script>try{if(localStorage.getItem('pata_theme')==='dark')document.documentElement.classList.add('dark');}catch(e){}</script>
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Pata AI">
