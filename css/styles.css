@@ -2643,7 +2643,7 @@ html.dark #creation-mode-select,
   border: none !important;
 }
 .photocopy-mode .math-step {
-  border-left-color: #000 !important;
+  border-left: none !important;
 }
 .photocopy-mode .sol-given {
   color: #000 !important;
@@ -2655,6 +2655,15 @@ html.dark #creation-mode-select,
   --mono-black: #000;
   border-color: #000 !important;
   box-shadow: none !important;
+}
+/* MONOCHROME: no black side rules anywhere. Callouts, blockquotes, headings
+   (incl. the PDF visual-format accent bars), quiz explanations, math steps etc.
+   all lose their left/right border. Table cells, figures/diagrams and the boxed
+   quiz options keep their real outlines. Word export reads these computed
+   styles, so the .docx comes out without side borders too. */
+.photocopy-mode .doc-page-canvas *:not(table):not(thead):not(tbody):not(tfoot):not(tr):not(th):not(td):not(.figure-pro):not(.figure-frame):not(.fc-wrapper):not(.quiz-option):not(.quiz-answer-key) {
+  border-left: none !important;
+  border-right: none !important;
 }
 .dark.photocopy-mode .doc-page-canvas,
 .dark.photocopy-mode .doc-page-canvas.pdf-format-aurora,
