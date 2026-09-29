@@ -6374,6 +6374,16 @@ html.dark .ai-model-card.active,
 
   #mobile-back-to-chat-btn { display: none !important; }
   #preview-content-area { min-height: 0 !important; }
+  /* Editor scroller: vertical pan only (diagonal drags used to nudge the page
+     sideways = "shaking"), no scroll chaining, and its own compositing layer. */
+  #document-view-container {
+    touch-action: pan-y pinch-zoom; overflow-x: clip !important; overscroll-behavior: contain;
+    scroll-behavior: auto !important; -webkit-overflow-scrolling: touch;
+  }
+  #document-view-container .doc-page-canvas {
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    contain: layout style; transform-origin: top left;
+  }
 
   /* --- Slide editor: thumbnails become a bottom strip, canvas gets the space --- */
   #slide-view-container { height: 100% !important; min-height: 0; }
