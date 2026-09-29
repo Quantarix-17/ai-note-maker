@@ -1230,8 +1230,18 @@ function scheduleFitEditor() {
   }, 80);
 }
 
+let _lastFitSig = '';
 function fitEditorPagesToScreen() {
   if (!docContainer) return;
+  // Many code paths call this (view switch x3, resize, ResizeObserver,
+  // MutationObserver...). Re-writing identical styles is wasted work on a phone
+  // and re-running it mid-scroll caused visible shaking, so bail out when the
+  // width, page count and mode are unchanged since the last real fit.
+  const _pc = docContainer.querySelectorAll('.doc-page-canvas').length;
+  const _sig = [docContainer.clientWidth, _pc, window.innerWidth <= 850 ? 'm' : 'd'].join('|');
+  const _first = docContainer.querySelector('.doc-page-canvas');
+  if (_sig === _lastFitSig && _first && _first.style.transform) return;
+  _lastFitSig = _sig;
   const pages = Array.from(docContainer.querySelectorAll('.doc-page-canvas'));
   if (!pages.length) return;
 
@@ -1262,10 +1272,16 @@ function fitEditorPagesToScreen() {
   docContainer.style.overflowX = 'hidden';
   docContainer.style.width = '100%';
 
-  const containerWidth = Math.max(1, docContainer.clientWidth || window.innerWidth || 360);
+  // Use the container's CONTENT width (client width minus its padding) and
+  // never fit while it is hidden (width 0): a hidden-measure fallback made the
+  // first fit differ from later ones, so the page visibly jumped on entry.
+  const _cs = getComputedStyle(docContainer);
+  const _padX = (parseFloat(_cs.paddingLeft) || 0) + (parseFloat(_cs.paddingRight) || 0);
+  if (!docContainer.clientWidth) return;
+  const containerWidth = Math.max(1, docContainer.clientWidth - _padX);
   const available = Math.max(1, containerWidth - 4);
   // FIX: the old 0.48 floor made the page 381px wide, wider than a 351px phone (clipped on the right). Always fit the real width.
-  const scale = Math.min(1, Math.max(0.2, available / EDITOR_A4_WIDTH));
+  const scale = Math.round(Math.min(1, Math.max(0.2, available / EDITOR_A4_WIDTH)) * 1000) / 1000;
 
   const scaledW = EDITOR_A4_WIDTH * scale;
   const scaledH = EDITOR_A4_HEIGHT * scale;
@@ -1300,7 +1316,6 @@ if (!window.__editorFitResizeBound) {
   window.addEventListener('orientationchange', () => { setTimeout(scheduleFitEditor, 200); }, { passive: true });
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', scheduleFitEditor, { passive: true });
-    window.visualViewport.addEventListener('scroll', scheduleFitEditor, { passive: true });
   }
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
