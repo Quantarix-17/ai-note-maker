@@ -165,7 +165,17 @@ const TAB_MANAGER = {
     // editor for everything else, so the shape of the page always matches
     // the kind of document this tab actually is.
     const _tabIsSlideDeck = !!(tab.slideDeck && Array.isArray(tab.slideDeck.slides) && tab.slideDeck.slides.length);
+    // FIX (mobile): switchPreviewTab() forces the Editor/Slides panel open on
+    // phones. Closing all tabs (or deleting a tab) reloads a tab through here,
+    // so the person got yanked out of AI Chat into the document editor.
+    // Remember the panel they were on BEFORE and put them back afterwards
+    // (same pattern as _syncBlankActiveTabToCreationMode in app.js).
+    const _isMobileLayout = typeof isMobileDeviceLayout === 'function' && isMobileDeviceLayout();
+    const _prevMobileView = (window.APP_STATE && window.APP_STATE.currentMobileView) || 'chat';
     if (typeof switchPreviewTab === 'function') switchPreviewTab(_tabIsSlideDeck ? 'slides' : 'editor');
+    if (_isMobileLayout && typeof setMobileView === 'function') {
+      setMobileView(_prevMobileView === 'chat' ? 'chat' : 'editor');
+    }
 
     if (window.APP_STATE) window.APP_STATE.selectedPage = null;
     if (window.APP_STATE) window.APP_STATE.selectedCommands = [];
