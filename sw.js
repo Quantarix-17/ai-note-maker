@@ -39,10 +39,11 @@ self.addEventListener('fetch', event => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // App shell: network-first (sob somoy notun code pabe), offline hole cache
+  // App shell: prottek launch-e hard refresh (network-first), offline hole cache theke
   if (url.origin === self.location.origin) {
     event.respondWith(
-      fetch(req).then(res => {
+      // cache:'reload' = hard refresh: browser-er HTTP cache bypass kore sorasori server theke ane
+      fetch(new Request(req.url, { cache: 'reload', credentials: 'same-origin' })).then(res => {
         if (res && res.ok) { const copy = res.clone(); caches.open(SHELL_CACHE).then(c => c.put(req, copy)); }
         return res;
       }).catch(() => caches.match(req).then(r => r || (req.mode === 'navigate' ? caches.match('./index.html') : undefined)))
