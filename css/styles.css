@@ -6379,6 +6379,15 @@ html.dark .ai-model-card.active,
   #document-view-container {
     touch-action: pan-y pinch-zoom; overflow-x: clip !important; overscroll-behavior: contain;
     scroll-behavior: auto !important; -webkit-overflow-scrolling: touch;
+    /* Anti-shake: the JS page fit measures this box's width, and scaling the
+       pages changes the content height. With classic (non-overlay) scrollbars
+       a vertical scrollbar appearing/disappearing changed that width by ~15px,
+       which re-triggered the fit -> different height -> scrollbar toggles ->
+       repeat (the page "earthquake"). Reserving the gutter keeps the width
+       constant. overflow-anchor:none stops the browser from nudging scrollTop
+       every time the fit resizes page margins/transforms. */
+    scrollbar-gutter: stable both-edges;
+    overflow-anchor: none;
   }
   #document-view-container .doc-page-canvas {
     backface-visibility: hidden; -webkit-backface-visibility: hidden;
