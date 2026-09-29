@@ -4222,7 +4222,15 @@ window.onload = function() {
   const _restoredIsSlideDeck = APP_STATE.creationMode === 'slides';
 
   if (typeof isMobileDeviceLayout === 'function' && isMobileDeviceLayout()) {
-    if (typeof setMobileView === 'function') setMobileView('editor');
+    // Phones land on AI Chat when the tab is still blank (that is where you
+    // start working); a tab that already has a document/deck reopens on it.
+    let _startView = 'chat';
+    try {
+      const _t = TAB_MANAGER.tabs.find(t => t.id === TAB_MANAGER.activeId);
+      const _info = (typeof _tabHasGeneratedContent === 'function' && _t) ? _tabHasGeneratedContent(_t) : { hasContent: false };
+      if (_info.hasContent) _startView = 'editor';
+    } catch (_) {}
+    if (typeof setMobileView === 'function') setMobileView(_startView);
   } else if (typeof switchPreviewTabDesktop === 'function') {
     switchPreviewTabDesktop('editor');
   }
