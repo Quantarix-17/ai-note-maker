@@ -1264,7 +1264,8 @@ function fitEditorPagesToScreen() {
 
   const containerWidth = Math.max(1, docContainer.clientWidth || window.innerWidth || 360);
   const available = Math.max(1, containerWidth - 4);
-  const scale = Math.min(1, Math.max(0.48, available / EDITOR_A4_WIDTH));
+  // FIX: the old 0.48 floor made the page 381px wide, wider than a 351px phone (clipped on the right). Always fit the real width.
+  const scale = Math.min(1, Math.max(0.2, available / EDITOR_A4_WIDTH));
 
   const scaledW = EDITOR_A4_WIDTH * scale;
   const scaledH = EDITOR_A4_HEIGHT * scale;
