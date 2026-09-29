@@ -1973,7 +1973,7 @@ function switchPreviewTab(tabName) {
     if (typeof isMobileDeviceLayout === 'function' && isMobileDeviceLayout()) {
       main.classList.add('mobile-view-' + tabName);
       document.querySelectorAll('.mobile-nav-btn').forEach(btn => btn.classList.remove('active'));
-      const mobBtn = document.getElementById('mob-btn-' + tabName);
+      const mobBtn = document.getElementById('mob-btn-' + (tabName === 'slides' ? 'editor' : tabName));
       if (mobBtn) mobBtn.classList.add('active');
     } else {
       main.classList.add('desktop-view-' + tabName);
