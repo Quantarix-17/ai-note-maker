@@ -1329,7 +1329,15 @@ if (!window.__editorFitResizeBound) {
       const w = Math.round((entries[0] && entries[0].contentRect && entries[0].contentRect.width) || 0);
       if (w > 0 && w !== _lastObservedW) {
         _lastObservedW = w;
-        scheduleFitEditor();
+        // FIX (mobile shake / jump on entry): when the Editor panel goes from
+        // display:none to visible, the pages first paint at full A4 width
+        // (794px) and only got scaled ~80ms later by the debounced fit, so
+        // the page visibly jumped/wobbled on entry. ResizeObserver callbacks
+        // run after layout but BEFORE paint, so fitting right here means the
+        // first frame the person sees is already the correctly scaled page.
+        // (fitEditorPagesToScreen bails out cheaply when nothing changed.)
+        clearTimeout(_fitEditorTimer);
+        try { fitEditorPagesToScreen(); } catch (_) {}
       }
     });
     ro.observe(docContainer);
