@@ -362,11 +362,13 @@ const TAB_MANAGER = {
       photocopyMode: state.photocopyMode !== undefined ? state.photocopyMode : document.body.classList.contains('photocopy-mode'),
       slideDeck: state.slideDeck || null
     };
-    if (insertAtStart === false) {
-      this.tabs.push(tab);
-    } else {
-      this.tabs.unshift(tab);
+    // SINGLE SESSION MODEL (no multi-tab): starting/opening anything replaces the current session.
+    // The outgoing session is handed to the cloud-history archiver (js/pata-cloud.js) first.
+    if (this.tabs.length) {
+      try { if (this.activeId) this._captureCurrentState(this.activeId); } catch (_) {}
+      try { if (typeof window.__pataArchiveTabs === 'function') window.__pataArchiveTabs(this.tabs.slice()); } catch (_) {}
     }
+    this.tabs = [tab];
     this._persist();
     return tab;
   },
@@ -405,6 +407,7 @@ const TAB_MANAGER = {
   },
 
   closeAllTabsWithConfirm() {
+    try { if (this.activeId) this._captureCurrentState(this.activeId); if (typeof window.__pataArchiveTabs === 'function') window.__pataArchiveTabs(this.tabs.slice()); } catch (_) {}
     this.tabs = [];
     this.activeId = null;
     TAB_FILE_OBJECTS.clear();
@@ -434,7 +437,7 @@ const TAB_MANAGER = {
     this._loadStateIntoUI(tab);
     this._persist();
     this.renderTabBar();
-    if (typeof displayToastNotification === 'function') displayToastNotification("✅ All tabs closed");
+    if (typeof displayToastNotification === 'function') displayToastNotification("✅ New session");
     if (typeof requestAnimationFrame === 'function') {
       requestAnimationFrame(() => { if (typeof fitEditorPagesToScreen === 'function') fitEditorPagesToScreen(); });
     }
@@ -546,7 +549,13 @@ const TAB_MANAGER = {
   },
 
   renderTabBar() {
+    // Multi-tab UI removed (single-session model): the tab bar is never drawn.
     const bar = document.getElementById('tab-bar');
+    if (bar) { bar.innerHTML = ''; bar.style.display = 'none'; }
+    const oldFab = document.getElementById('topbar-newtab-fab-btn');
+    if (oldFab) oldFab.style.display = 'none';
+    return;
+    // eslint-disable-next-line no-unreachable
     if (!bar) return;
     const active = this.getActive();
 
@@ -710,7 +719,7 @@ window.loadProjectFromFile = function(fileList) {
       );
       TAB_MANAGER.switchTo(tab.id);
       if (typeof displayToastNotification === 'function') {
-        displayToastNotification(`📂 Loaded project into new tab: "${tab.name}"`);
+        displayToastNotification(`📂 Loaded project: "${tab.name}"`);
       }
     } catch (e) {
       if (typeof displayToastNotification === 'function') {
@@ -735,7 +744,7 @@ function startNewProject() {
     const html = typeof getAllCanvasHTML === 'function' ? getAllCanvasHTML() : '';
     const hasContent = (html && !html.includes('Start typing here')) ||
       !!(window.APP_STATE && window.APP_STATE.slideDeck && Array.isArray(window.APP_STATE.slideDeck.slides) && window.APP_STATE.slideDeck.slides.length);
-    if (hasContent && !confirm('Start a new blank document? This will create a new tab with a fresh document.')) {
+    if (hasContent && !confirm(window.__pataBackupOn ? 'Start a new session? The current one stays in your History.' : 'Start a new session? Backup is OFF, so the current one will be lost.')) {
       return;
     }
   }
