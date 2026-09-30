@@ -228,13 +228,19 @@ async function signIn(mode) {
 async function finishAuth(result, mode) {
   const { auth } = G.fb, user = result.user, info = auth.getAdditionalUserInfo(result), isNew = !!(info && info.isNewUser);
   try { sessionStorage.removeItem('paperly_auth_intent'); } catch (_) {}
+  const mail = user.email || 'this Google account';
   if (mode === 'signin' && isNew) {                          // Google just created an account the person never signed up for → undo it
-    const mail = user.email || 'this Google account';
+    G.holdAuthUi = Date.now() + 2500;                        // keep the sign-out event below from redrawing the panel over our message
     try { await auth.deleteUser(user); } catch (_) { try { await auth.signOut(G.auth); } catch (__) {} }
     G.verifying = false;
-    return showAuth('signup', `No PaperLy account found for ${mail}. Create one with Sign up.`);
+    return showAuth('signup', `No PaperLy account found for ${mail}. Please Sign up first.`);
   }
-  if (mode === 'signup' && !isNew) wait('You already have an account — signing you in…');
+  if (mode === 'signup' && !isNew) {                         // already registered → ask them to use Sign in instead
+    G.holdAuthUi = Date.now() + 2500;
+    try { await auth.signOut(G.auth); } catch (_) {}
+    G.verifying = false;
+    return showAuth('signin', `${mail} already has a PaperLy account. Please Sign in.`);
+  }
   G.verifying = false;
   afterLogin(user);
 }
@@ -742,6 +748,7 @@ function listenAuth(keepMessage) {
   G.fb.auth.onAuthStateChanged(G.auth, user => {
     if (G.verifying) return;
     if (user) afterLogin(user);
+    else if (G.holdAuthUi && Date.now() < G.holdAuthUi) return;     // we just showed a Sign in / Sign up hint — don't wipe it
     else { G.started = false; G.uid = null; G.user = null; G.ready = false; G.reconciled = false; setStatus('off'); if (keepMessage) { keepMessage = false; return; } showAuth('signin'); }
   });
 }
