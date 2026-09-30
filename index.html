@@ -185,7 +185,26 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
   <!-- Main Styles -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://ai-note-maker-16d3a.firebaseapp.com" crossorigin>
   <link rel="stylesheet" href="css/styles.css">
+  <style id="pata-session-css">
+    /* Single-session model: no tab bar, so give its height back to the layout */
+    #tab-bar,#desktop-close-all-tabs-btn,#topbar-newtab-fab-btn,#tab-new-btn{display:none!important}
+    :root,html,body{--tabbar-height:0px!important;--mobile-tabbar:0px!important}
+    /* Top-left Google account avatar (replaces the app icon) */
+    #topbar #pata-avatar-btn{position:relative;display:flex!important;align-items:center;justify-content:center;flex:0 0 auto;width:38px!important;height:38px!important;
+      padding:0;border:0;border-radius:50%!important;background:#4f7df3;color:#fff;cursor:pointer;font:700 16px Inter,Arial,sans-serif;box-shadow:0 2px 8px rgba(79,125,243,.35)}
+    #pata-avatar-btn .pa-face{width:100%;height:100%;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center}
+    #pata-avatar-btn .pa-face img{width:100%;height:100%;object-fit:cover;display:block}
+    #pata-avatar-btn .pa-face svg{width:22px;height:22px}
+    #pata-avatar-btn .pa-dot{position:absolute;right:-1px;bottom:-1px;width:11px;height:11px;border-radius:50%;background:#9ca3af;border:2px solid #fff;box-sizing:border-box}
+    html.dark #pata-avatar-btn .pa-dot{border-color:#111827}
+    #pata-avatar-btn.ok .pa-dot{background:#22c55e}#pata-avatar-btn.busy .pa-dot{background:#f59e0b}#pata-avatar-btn.err .pa-dot{background:#ef4444}
+    #topbar .logo-text{margin-left:2px}
+  </style>
   <!-- Pata AI: sign-in gate (visible immediately; hidden by js/pata-cloud.js once the user is signed in) -->
   <style id="pata-gate-css">
     #pata-gate{position:fixed;inset:0;z-index:2147482000;display:flex;align-items:center;justify-content:center;padding:20px;
@@ -215,6 +234,12 @@
     #pata-gate .pg-key{font:700 16px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em;word-break:break-all;padding:14px;border-radius:12px;background:rgba(79,125,243,.1);margin-bottom:12px;user-select:all}
     #pata-gate .pg-check{display:flex;gap:8px;align-items:center;justify-content:center;font-size:13.5px;margin:4px 0 14px;cursor:pointer}
     #pata-gate .pg-spin{width:38px;height:38px;margin:22px auto 14px;border-radius:50%;border:4px solid rgba(79,125,243,.2);border-top-color:#4f7df3;animation:pgspin .8s linear infinite}
+    #pata-gate .pg-tabs{display:flex;gap:4px;padding:4px;margin:14px 0 4px;border-radius:14px;background:rgba(148,163,184,.18)}
+    #pata-gate .pg-tabs button{flex:1;border:0;border-radius:10px;padding:9px 10px;font:700 14px Inter,Arial,sans-serif;background:transparent;color:inherit;cursor:pointer;opacity:.7}
+    #pata-gate .pg-tabs button.on{background:#4f7df3;color:#fff;opacity:1}
+    #pata-gate .pg-list{list-style:none;margin:0 0 16px;padding:0;text-align:left;font-size:13.5px;line-height:1.9;color:#475569}
+    html.dark #pata-gate .pg-list{color:#cbd5e1}
+    #pata-gate .pg-list li::before{content:"✓ ";color:#22c55e;font-weight:800}
     @keyframes pgspin{to{transform:rotate(360deg)}}
   </style>
 
@@ -287,10 +312,9 @@
   <!-- TOP NAV -->
   <div id="topbar">
     <div class="logo">
-      <span class="logo-mark ui-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24"><path d="M12 3.5 14 9l5.5 2-5.5 2-2 5.5-2-5.5-5.5-2 5.5-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-      </span>
-      <img class="logo-img" src="icons/tamim.png" alt="Pata AI" width="36" height="36" decoding="async">
+      <button type="button" id="pata-avatar-btn" class="logo-img" aria-label="Account and history" title="History &amp; account">
+        <span class="pa-face"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="4" fill="currentColor"/><path d="M4 20c1.2-4 4.2-6 8-6s6.8 2 8 6z" fill="currentColor"/></svg></span><span class="pa-dot"></span>
+      </button>
       <span class="logo-text">Pata<span>&nbsp; AI</span></span>
       <div id="chat-model-bar">
         <span id="chat-model-bar-icon" class="ui-icon" aria-hidden="true">
@@ -312,8 +336,6 @@
     </div>
     <div class="spacer"></div>
 
-    <!-- Mobile: Close All Tabs FAB -->
-    <button class="topbar-fab-btn" id="topbar-newtab-fab-btn" onclick="TAB_MANAGER.closeAllTabsWithConfirm()" aria-label="Close all tabs" title="Close all tabs"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7.5" width="13" height="13" rx="2.5"/><path d="M8 3.5h10.5a2 2 0 0 1 2 2V16M7.5 12l5 5M12.5 12l-5 5"/></svg></button>
     <button class="topbar-fab-btn" id="topbar-new-fab-btn" onclick="startNewProject()" aria-label="Start new document" title="New document">+</button>
     <button class="topbar-btn" id="topbar-more-btn" type="button" aria-label="More options" aria-haspopup="menu" aria-expanded="false">⋮</button>
 
@@ -327,9 +349,6 @@
       </button>
       <button class="topbar-btn" onclick="startNewProject()">
         <span class="ui-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.5h9l3 3V20H6z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14.5 3.5V7H18" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span>New
-      </button>
-      <button class="topbar-btn" id="desktop-close-all-tabs-btn" onclick="TAB_MANAGER.closeAllTabsWithConfirm()" title="Close all open tabs" aria-label="Close all open tabs">
-        <span class="ui-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg></span>Close Tabs
       </button>
       <button class="topbar-btn" onclick="saveProjectFile()">
         <span class="ui-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5z" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 4v5h8V4M8 16h8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span>Save
