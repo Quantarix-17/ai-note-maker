@@ -1,6 +1,6 @@
 // Pata AI — service worker (app shell offline cache).
 // Code update dile CACHE_VERSION ta bodle din (v1 -> v2), tahole purono cache muche jabe.
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const SHELL_CACHE = 'shell-' + CACHE_VERSION;
 const LIB_CACHE = 'libs-' + CACHE_VERSION;
 
