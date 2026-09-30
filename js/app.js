@@ -3707,6 +3707,41 @@ async function sendChatPromptToAI() {
         return;
       }
 
+      // ========== EXAM PAPER (MCQ + OMR) — everything is driven by js/exam-library.js ==========
+      // Edit exam-library.js to change the paper format, the questions the AI asks
+      // (pages / OMR / difficulty / count), difficulty rules and subject guidance —
+      // no change is needed here.
+      if (intentPayload.intent === 'create_pdf' && typeof isExamRequest === 'function' && isExamRequest(promptText)) {
+        const _examStartedAt = Date.now();
+        const examResult = typeof generateExamPaper === 'function'
+          ? await generateExamPaper(promptText, fileContextString, modelsUsed, intentPayload, {
+              isEmptyCanvas: isEmptyCanvasForStep,
+              isReplace: /(replace|rewrite|start over|নতুন করে|মুছে ফেলে|পুনরায় লিখ)/i.test(promptText)
+            })
+          : { ok: false, message: 'Exam Library module not loaded.' };
+        if (examResult && examResult.clarify) await ensureMinimumThinkingDelay(_examStartedAt);
+        if (loadingElement && loadingElement.isConnected) loadingElement.remove();
+        if (typeof ProgressUI !== 'undefined' && ProgressUI.hide && !(examResult && examResult.ok)) ProgressUI.hide();
+        if (examResult && examResult.clarify) {
+          _setPendingClarifyState('create_pdf', _clarifyOriginalPromptForThisTurn, examResult.clarify.question);
+          _rePinIntentCommandForClarify('create_pdf');
+          appendClarifyMessageToUI(examResult.clarify.question, examResult.clarify.options);
+        } else if (examResult && examResult.ok) {
+          APP_STATE.pendingClarify = null;
+          if (typeof isMobileDeviceLayout === 'function' && isMobileDeviceLayout() && typeof setMobileView === 'function') setMobileView('editor');
+          if (typeof appendChatMessageToUI === 'function') appendChatMessageToUI('ai', typeof formatExamSummary === 'function' ? formatExamSummary(examResult) : '✅ Exam paper generated.');
+          _updateLivePageNumberFromCurrentDocument();
+        } else if (!examResult || !examResult.aborted) {
+          const reason = (examResult && examResult.message) ? examResult.message : 'Unknown error.';
+          if (typeof appendChatMessageToUI === 'function') appendChatMessageToUI('error', `Exam generation failed: ${reason}`);
+        }
+        APP_STATE.suppressDocumentAIChat = false;
+        APP_STATE.isAIGenerating = false;
+        document.getElementById('send-message-btn').disabled = false;
+        inputField.focus();
+        return;
+      }
+
       // ========== DIAGRAM EDIT ==========
       if (typeof isDiagramEditRequest === 'function' && isDiagramEditRequest(promptText, intentPayload)) {
         const diagramResult = typeof handleDiagramEditOrRefine === 'function' ? await handleDiagramEditOrRefine(promptText, intentPayload, pageContext, modelsUsed) : null;
