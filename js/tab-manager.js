@@ -363,10 +363,10 @@ const TAB_MANAGER = {
       slideDeck: state.slideDeck || null
     };
     // SINGLE SESSION MODEL (no multi-tab): starting/opening anything replaces the current session.
-    // The outgoing session is handed to the cloud-history archiver (js/pata-cloud.js) first.
+    // The outgoing session is handed to the cloud-history archiver (js/paperly-cloud.js) first.
     if (this.tabs.length) {
       try { if (this.activeId) this._captureCurrentState(this.activeId); } catch (_) {}
-      try { if (typeof window.__pataArchiveTabs === 'function') window.__pataArchiveTabs(this.tabs.slice()); } catch (_) {}
+      try { if (typeof window.__paperlyArchiveTabs === 'function') window.__paperlyArchiveTabs(this.tabs.slice()); } catch (_) {}
     }
     this.tabs = [tab];
     this._persist();
@@ -407,7 +407,7 @@ const TAB_MANAGER = {
   },
 
   closeAllTabsWithConfirm() {
-    try { if (this.activeId) this._captureCurrentState(this.activeId); if (typeof window.__pataArchiveTabs === 'function') window.__pataArchiveTabs(this.tabs.slice()); } catch (_) {}
+    try { if (this.activeId) this._captureCurrentState(this.activeId); if (typeof window.__paperlyArchiveTabs === 'function') window.__paperlyArchiveTabs(this.tabs.slice()); } catch (_) {}
     this.tabs = [];
     this.activeId = null;
     TAB_FILE_OBJECTS.clear();
@@ -744,7 +744,7 @@ function startNewProject() {
     const html = typeof getAllCanvasHTML === 'function' ? getAllCanvasHTML() : '';
     const hasContent = (html && !html.includes('Start typing here')) ||
       !!(window.APP_STATE && window.APP_STATE.slideDeck && Array.isArray(window.APP_STATE.slideDeck.slides) && window.APP_STATE.slideDeck.slides.length);
-    if (hasContent && !confirm(window.__pataBackupOn ? 'Start a new session? The current one stays in your History.' : (window.__pataGuest ? 'Start a new session? You are in Guest mode (offline, nothing is saved), so the current one will be lost.' : 'Start a new session? The current one could not be backed up yet.'))) {
+    if (hasContent && !confirm(window.__paperlyBackupOn ? 'Start a new session? The current one stays in your History.' : (window.__paperlyGuest ? 'Start a new session? You are in Guest mode (offline, nothing is saved), so the current one will be lost.' : 'Start a new session? The current one could not be backed up yet.'))) {
       return;
     }
   }
