@@ -812,6 +812,12 @@
        and the docx CDN script above; must load before app.js -->
   <script src="js/word-export.js"></script>
 
+  <!-- Exam Library (MCQ প্রশ্নপত্র + compact OMR). All exam behaviour — format, questions the AI
+       asks, difficulty, subjects, prompt rules — lives in this ONE file. Edit it and the AI follows
+       on the next request. Must load after document-editor.js and before app.js.
+       Bump ?v= after editing if the browser/service worker serves a cached copy. -->
+  <script src="js/exam-library.js?v=1"></script>
+
   <!-- 12. Main App (initialization) -->
   <script src="js/app.js"></script>
 
