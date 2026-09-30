@@ -27,7 +27,7 @@ const MAX_INDEX = 300, MAX_UPLOAD_CHARS = 8000000, PLAIN_CHUNK = 250000;
 
 // ---------- state / helpers ----------
 const G = { fb: null, auth: null, db: null, user: null, uid: null, started: false, verifying: false, session: null, meta: null,
-  index: null, hashes: {}, timer: null, running: false, status: 'off', lastAt: 0, err: '', engineOn: false };
+  index: null, hashes: {}, chunkCount: {}, pre: null, preAt: 0, timer: null, running: false, status: 'off', lastAt: 0, err: '', engineOn: false };
 const lsGet = k => { try { return localStorage.getItem(k); } catch (_) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {} };
 const lsDel = k => { try { localStorage.removeItem(k); } catch (_) {} };
@@ -259,6 +259,18 @@ const R = {
 async function getData(ref) { const s = await T(G.fb.fs.getDoc(ref), 15000); return s.exists() ? s.data() : null; }
 const setData = (ref, data) => T(G.fb.fs.setDoc(ref, data), 15000);
 const patchSync = o => writeSync(Object.assign(readSync(), o));
+// Start every cloud read we know we will need AT THE SAME TIME as soon as the person is signed in, so the restore
+// waits for ONE round-trip instead of four in a row (old-vault check, API keys, settings, history list).
+function prefetchCloud() {
+  const grab = f => { const p = f(); p.catch(() => {}); return p; };
+  G.preAt = Date.now();
+  G.pre = { meta: grab(() => getData(R.old.meta())), secrets: grab(() => getData(R.secrets())), prefs: grab(() => getData(R.prefs())), index: grab(() => loadIndex()) };
+}
+async function takePre(key, fetcher) {
+  const p = G.pre && G.pre[key]; if (G.pre) delete G.pre[key];
+  if (p && Date.now() - G.preAt < 60000) { try { return await p; } catch (_) {} }
+  return fetcher();
+}
 
 // ---------- one-time upgrade of an OLD passphrase-protected backup ----------
 // New accounts never see any of this. It only runs for accounts that created the old vault.
@@ -307,7 +319,7 @@ async function migrateLegacy(force) {
   const st = readSync();
   if (st.legacyDone || (st.legacySkipped && !force)) return false;
   if (!V || !(window.crypto && window.crypto.subtle)) return false;   // only needed to open an OLD passphrase backup
-  G.meta = await getData(R.old.meta());
+  G.meta = await takePre('meta', () => getData(R.old.meta()));
   if (!G.meta) { patchSync({ legacyDone: true }); return false; }
   G.legacyPending = true;
   G.legacy = await V.sessionFromCache(G.uid);                 // devices that were already unlocked need no passphrase
@@ -390,7 +402,7 @@ const decodeGroup = async (g, cloud) => {
 async function reconcileSettings() {
   const st = readSync(); let reload = false;
   for (const g of ['secrets', 'prefs']) {
-    const ref = refOf(g), cloud = await getData(ref);
+    const ref = refOf(g), cloud = await takePre(g, () => getData(ref));
     const local = collectGroup(g), lh = V.hash(JSON.stringify(local)), s = st[g] || {};
     const upload = async () => { const rev = Date.now(); await setData(ref, await encodeGroup(g, local, rev)); st[g] = { hash: lh, rev }; };
     const download = async () => {
@@ -483,12 +495,17 @@ async function writeEntry(id, payload) {
   }
   await G.fb.fs.setDoc(R.hist(id), { v: 2, n: chunks.length, rev: Date.now() });
   if (oldN > chunks.length) { const batch = fs.writeBatch(G.db); for (let i = chunks.length; i < oldN; i++) batch.delete(R.chunk(id, i)); await batch.commit(); }
+  G.chunkCount[id] = chunks.length;
   return text.length;
 }
-async function readEntry(id) {
+async function readEntry(id, nHint) {
+  const load = async n => {
+    const parts = await Promise.all(Array.from({ length: n }, (_, i) => getData(R.chunk(id, i))));
+    return JSON.parse(parts.map(p => p.d).join(''));
+  };
+  if (nHint > 0) { try { return await load(nHint); } catch (_) { /* stale hint → read the real chunk count below */ } }
   const head = await getData(R.hist(id)); if (!head) throw new Error('missing');
-  const parts = await Promise.all(Array.from({ length: head.n }, (_, i) => getData(R.chunk(id, i))));
-  return JSON.parse(parts.map(p => p.d).join(''));
+  return load(head.n);
 }
 function pushHistory(tabs) {
   return serial(async () => {
@@ -499,14 +516,15 @@ function pushHistory(tabs) {
       const p = tabPayload(t), h = V.hash(JSON.stringify(p));
       if (G.hashes[t.__cid] !== h) changed.push({ id: t.__cid, p, h });
     }
-    if (!changed.length) return;
+    if (!changed.length) return false;
     const byId = new Map((await loadIndex()).map(e => [e.id, e]));
     for (const c of changed) {
       const size = await writeEntry(c.id, c.p);
-      byId.set(c.id, { id: c.id, title: sessionTitle(c.p), kind: c.p.slideDeck ? 'slides' : 'doc', updatedAt: Date.now(), chats: c.p.chatHistory.length, kb: Math.round(size / 1024) });
+      byId.set(c.id, { id: c.id, title: sessionTitle(c.p), kind: c.p.slideDeck ? 'slides' : 'doc', updatedAt: Date.now(), chats: c.p.chatHistory.length, kb: Math.round(size / 1024), n: G.chunkCount[c.id] });
       G.hashes[c.id] = c.h;
     }
     await saveIndex([...byId.values()]);
+    return true;
   });
 }
 // Called by TAB_MANAGER.createTab() just before the current session is replaced.
@@ -627,9 +645,9 @@ async function openDrawer() {
   $('#pd-search', d).style.display = '';
   if (!G.ready) { list.innerHTML = '<div class="pd-empty">Setting up your backup…</div>'; return; }
   if (G.index) renderList(); else list.innerHTML = '<div class="pd-empty">Loading history…</div>';
-  try { await T(pushHistory(liveTabs()), 60000); } catch (_) {}      // make sure the current session is listed too
-  try { G.index = await T(serial(loadIndex), 20000); renderList(); }
+  try { G.index = await T(serial(() => takePre('index', loadIndex)), 20000); renderList(); }
   catch (e) { if (!G.index) list.innerHTML = `<div class="pd-empty">${esc(explain(e))}</div>`; }
+  T(pushHistory(liveTabs()), 60000).then(changed => { if (changed) renderList(); }).catch(() => {});   // list the current session too, without making the person wait
 }
 function closeDrawer() { const d = $('#paperly-drawer'); if (d) d.classList.remove('show'); }
 const currentCid = () => { const tm = window.TAB_MANAGER; const a = tm && tm.getActive && tm.getActive(); return a && a.__cid; };
@@ -664,7 +682,7 @@ function renderList() {
   });
 }
 async function openEntry(id) {
-  const p = await readEntry(id), tm = window.TAB_MANAGER;
+  const known = (G.index || []).find(e => e.id === id), p = await readEntry(id, known && known.n), tm = window.TAB_MANAGER;
   // createTab() archives + REPLACES the current session (single-session model)
   const tab = tm.createTab(p.name, p.htmlContent, { chatHistory: p.chatHistory || [], attachedFiles: p.attachedFiles || {}, undoStack: [], redoStack: [],
     projectVersion: p.projectVersion || 0, theme: p.theme, photocopyMode: !!p.photocopyMode, slideDeck: p.slideDeck || null }, true);
@@ -722,7 +740,7 @@ async function afterLogin(user) {
   const owner = lsGet('paperly_local_owner');
   if (owner && owner !== user.uid) { WIPE_KEYS.forEach(lsDel); lsSet('paperly_local_owner', user.uid); location.reload(); return; }   // never mix two accounts' data
   lsSet('paperly_local_owner', user.uid);
-  G.ready = true;
+  G.ready = true; prefetchCloud();
   { const st = readSync(); if (!st.v3) { st.v3 = 1; if (st.secrets) st.secrets.hash = '__reupload'; writeSync(st); } }   // one-time: re-upload API keys as plain text
   if (readSync().synced) { closeGate(); setStatus('busy'); startEngine(); runBackup(false); return; }   // known device: never make the person wait
   await setupBackupFlow();
