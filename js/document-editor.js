@@ -124,8 +124,6 @@ function pageHasContent(page) {
   const placeholderStrings = [
     'start typing here',
     'or ask ai on the left to generate notes',
-    'page 1 of 1',
-    'page 1',
     'ask ai to create...',
     // The blank-document cover placeholder (_fillBlankSolePageWithCoverPlaceholder)
     // is a screen-only convenience, never something to export or count as real
@@ -135,7 +133,11 @@ function pageHasContent(page) {
     // PDF/Word export path that already defers to pageHasContent().
     'created by tamim'
   ];
-  const isPlaceholderOnly = placeholderStrings.some(s => normalized.includes(s)) || normalized === '';
+  // 'page 1' / 'page 1 of 1' must match exactly: a substring match would
+  // wrongly treat real content like "see page 10" as an empty placeholder.
+  const exactPlaceholders = ['page 1 of 1', 'page 1'];
+  const isPlaceholderOnly = placeholderStrings.some(s => normalized.includes(s)) ||
+    exactPlaceholders.includes(normalized) || normalized === '';
 
   const hasVisual = !!clone.querySelector('img, svg, table, .katex-eq, .fc-wrapper, .figure-pro, .block-solution, .quiz-container');
 
