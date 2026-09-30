@@ -186,6 +186,37 @@
 
   <!-- Main Styles -->
   <link rel="stylesheet" href="css/styles.css">
+  <!-- Pata AI: sign-in gate (visible immediately; hidden by js/pata-cloud.js once the user is signed in) -->
+  <style id="pata-gate-css">
+    #pata-gate{position:fixed;inset:0;z-index:2147482000;display:flex;align-items:center;justify-content:center;padding:20px;
+      background:linear-gradient(135deg,#eef2ff,#f8fafc 55%,#e0e7ff);color:#0f172a;font-family:Inter,"Hind Siliguri",Arial,sans-serif;overflow:auto}
+    html.dark #pata-gate{background:linear-gradient(135deg,#0b1020,#111827 55%,#1e1b4b);color:#f1f5f9}
+    #pata-gate[hidden]{display:none!important}
+    #pata-gate .pg-card{width:100%;max-width:400px;text-align:center;background:#fff;border-radius:26px;padding:30px 26px 24px;box-shadow:0 24px 70px rgba(30,41,99,.22)}
+    html.dark #pata-gate .pg-card{background:#111827;box-shadow:0 24px 70px rgba(0,0,0,.55)}
+    #pata-gate .pg-logo{width:72px;height:72px;border-radius:18px;object-fit:cover}
+    #pata-gate h1{margin:10px 0 2px;font-size:24px;font-weight:800;letter-spacing:-.01em}
+    #pata-gate h2{margin:14px 0 8px;font-size:19px;font-weight:800}
+    #pata-gate .pg-muted{margin:0 0 16px;font-size:14px;line-height:1.6;color:#64748b}
+    html.dark #pata-gate .pg-muted{color:#94a3b8}
+    #pata-gate .pg-warn{margin:0 0 14px;font-size:13px;color:#b45309;background:#fef3c7;border-radius:10px;padding:8px 10px}
+    #pata-gate .pg-err{min-height:18px;margin:2px 0 10px;font-size:13px;color:#ef4444}
+    #pata-gate .pg-btn{width:100%;border:0;border-radius:14px;padding:13px 16px;font:700 15px Inter,Arial,sans-serif;background:#4f7df3;color:#fff;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;gap:10px;transition:transform .12s,opacity .12s}
+    #pata-gate .pg-btn:active{transform:scale(.97)}#pata-gate .pg-btn[disabled]{opacity:.55;cursor:not-allowed}
+    #pata-gate .pg-google{background:#fff;color:#1f2937;border:1px solid #dadce0}
+    html.dark #pata-gate .pg-google{background:#1f2937;color:#f1f5f9;border-color:#374151}
+    #pata-gate .pg-sec{background:rgba(148,163,184,.2);color:inherit;flex:1}
+    #pata-gate .pg-row{display:flex;gap:8px;margin-bottom:12px}
+    #pata-gate .pg-in{width:100%;box-sizing:border-box;margin-bottom:10px;padding:12px 14px;font:500 15px Inter,Arial,sans-serif;border-radius:12px;
+      border:1px solid #cbd5e1;background:transparent;color:inherit}
+    #pata-gate .pg-in:focus{outline:2px solid #4f7df3;border-color:transparent}
+    #pata-gate .pg-link{display:block;width:100%;margin-top:8px;border:0;background:transparent;color:#64748b;font:600 13.5px Inter,Arial,sans-serif;padding:8px;cursor:pointer}
+    #pata-gate .pg-key{font:700 16px ui-monospace,Menlo,Consolas,monospace;letter-spacing:.04em;word-break:break-all;padding:14px;border-radius:12px;background:rgba(79,125,243,.1);margin-bottom:12px;user-select:all}
+    #pata-gate .pg-check{display:flex;gap:8px;align-items:center;justify-content:center;font-size:13.5px;margin:4px 0 14px;cursor:pointer}
+    #pata-gate .pg-spin{width:38px;height:38px;margin:22px auto 14px;border-radius:50%;border:4px solid rgba(79,125,243,.2);border-top-color:#4f7df3;animation:pgspin .8s linear infinite}
+    @keyframes pgspin{to{transform:rotate(360deg)}}
+  </style>
 
   <!-- Critical inline styles -->
   <style>
@@ -243,6 +274,14 @@
   </style>
 </head>
 <body>
+  <!-- Pata AI: sign-in gate -->
+  <div id="pata-gate" role="dialog" aria-modal="true" aria-label="Sign in">
+    <div class="pg-card">
+      <img class="pg-logo" src="icons/tamim.png" alt="" width="72" height="72">
+      <h1>Pata AI</h1>
+      <div id="pg-body"><div class="pg-spin"></div><p class="pg-muted">Loading…</p></div>
+    </div>
+  </div>
   <div id="pdf-print-stage"></div>
 
   <!-- TOP NAV -->
@@ -754,6 +793,9 @@
   <script src="js/app.js"></script>
 
   <!-- PWA: service worker + install button -->
+  <script src="js/firebase-config.js"></script>
+  <script src="js/pata-vault.js"></script>
+  <script type="module" src="js/pata-cloud.js"></script>
   <script src="pwa.js"></script>
 
   <!-- ===== MOBILE VIEWPORT SYNC ===== -->
