@@ -8,7 +8,10 @@
   <meta name="theme-color" content="#4f7df3">
   <!-- Apply last-selected theme instantly (no light/dark flash on launch) -->
   <script>try{['theme','mode','local_owner','sync_state'].forEach(function(k){var o=localStorage.getItem('pata_'+k);if(o!==null){if(localStorage.getItem('paperly_'+k)===null)localStorage.setItem('paperly_'+k,o);localStorage.removeItem('pata_'+k);}});}catch(e){}</script>
-  <script>try{if(localStorage.getItem('paperly_mode')==='guest')document.documentElement.classList.add('paperly-guest');}catch(e){}</script>
+  <script>try{if(localStorage.getItem('paperly_mode')==='guest')document.documentElement.classList.add('paperly-guest');else{
+    // Start downloading the Firebase SDK while the page is still loading (the cloud module imports these same URLs later).
+    ['app','auth','firestore'].forEach(function(m){var l=document.createElement('link');l.rel='modulepreload';l.href='https://www.gstatic.com/firebasejs/10.14.1/firebase-'+m+'.js';document.head.appendChild(l);});
+  }}catch(e){}</script>
   <script>try{if(localStorage.getItem('paperly_theme')==='dark')document.documentElement.classList.add('dark');}catch(e){}</script>
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
