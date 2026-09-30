@@ -118,6 +118,7 @@ function toggleAtCommandMenu() {
 }
 
 function openAtCommandMenu(mode) {
+  try { syncCreateAddCommandSelection({ silent: true }); } catch (_) { /* best-effort */ }
   AT_MENU_STATE.open = true;
   AT_MENU_STATE.mode = mode || 'button';
   AT_MENU_STATE.filtered = getOrderedAtCommands(getModeFilteredAtCommands());
@@ -189,14 +190,115 @@ function hasSelectedCommand(id) {
 
 function hasDocumentContentForAtCommands() {
   try {
-    const pages = Array.from(document.querySelectorAll('.doc-page-canvas'));
+    const pages = Array.from(document.querySelectorAll(".doc-page-canvas"));
     if (!pages.length) return false;
-    const text = pages.map(p => (p.innerText || '').trim()).join('\n').trim();
-    return !!text && !/^Start typing here\s*$/i.test(text);
+    // Reuse the editor's own definition of "real content" so the default
+    // blank-document placeholders ("Start typing here... Or ask AI...", the
+    // cover-page placeholder, page footers) never count as an existing
+    // document. Otherwise a brand-new editor already looks "generated" and
+    // the menu shows Add instead of Create.
+    if (typeof pageHasContent === "function") {
+      return pages.some(p => pageHasContent(p));
+    }
+    // Fallback (editor script not loaded yet): text-based placeholder check.
+    const placeholders = ["start typing here", "or ask ai on the left", "created by tamim"];
+    return pages.some(p => {
+      const clone = p.cloneNode(true);
+      clone.querySelectorAll(".page-footer-number").forEach(f => f.remove());
+      const t = (clone.innerText || clone.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+      const hasVisual = !!clone.querySelector("img, svg, table, .katex-eq, .fc-wrapper, .figure-pro, .block-solution, .quiz-container");
+      const isPlaceholder = !t || placeholders.some(x => t.includes(x));
+      return (!isPlaceholder && t.length >= 2) || hasVisual;
+    });
   } catch (e) {
     return false;
   }
 }
+
+// ===== CREATE <-> ADD (one card, two meanings) =====
+// Before a document exists the "Create" card means "make a new document".
+// Once a PDF/Word document has been generated it turns into "Add" (append to
+// the existing document). Slides mode always stays "Create" (a deck is edited
+// slide-by-slide, not appended to).
+function isCreateModeAddable() {
+  return _currentAtCommandMode() === 'pdf' && hasDocumentContentForAtCommands();
+}
+function resolveCreateOrAddCommand(cmd) {
+  if (!cmd) return cmd;
+  if (cmd.id === 'create_pdf' && isCreateModeAddable()) {
+    const addCmd = getAtCommandById('add');
+    if (addCmd) return addCmd;
+  }
+  return cmd;
+}
+// Keeps an already-selected Create/Add chip in step with reality: Create ->
+// Add once a document exists, Add -> Create when the document is gone (new
+// session, retry reset, ...). It never ADDS a chip the person did not pick and
+// never removes one, it only swaps between the two meanings.
+function syncCreateAddCommandSelection(opts = {}) {
+  const S = window.APP_STATE;
+  if (!S || !Array.isArray(S.selectedCommands)) return false;
+  if (S.pendingClarify) return false; // mid-question: keep the intent the question belongs to
+  const sel = S.selectedCommands;
+  const useAdd = isCreateModeAddable();
+  const createIdx = sel.findIndex(c => c.id === 'create_pdf' && !c.implicit);
+  const addIdx = sel.findIndex(c => c.id === 'add' && !c.implicit);
+  let changed = false;
+  let toast = '';
+  if (useAdd && createIdx > -1 && addIdx === -1) {
+    const meta = getAtCommandById('add');
+    if (meta) {
+      sel[createIdx] = { id: meta.id, category: meta.category, label: meta.label, icon: meta.icon, param: null, implicit: false };
+      changed = true;
+      toast = 'A document already exists, so @Create is now @Add (new content is added to it).';
+    }
+  } else if (!useAdd && addIdx > -1 && createIdx === -1) {
+    const meta = getAtCommandById('create_pdf');
+    if (meta) {
+      const slides = _currentAtCommandMode() === 'slides';
+      sel[addIdx] = {
+        id: meta.id, category: meta.category,
+        label: slides ? 'Create Slides' : meta.label, icon: slides ? 'slides' : meta.icon,
+        param: null, implicit: false
+      };
+      changed = true;
+      toast = 'No document yet, so @Add is now @Create.';
+    }
+  }
+  if (!changed) return false;
+  if (sel.filter(c => c.id === 'add' || c.id === 'create_pdf').length > 1) {
+    // never leave both chips selected
+    const seen = new Set();
+    S.selectedCommands = sel.filter(c => {
+      if (c.id !== 'add' && c.id !== 'create_pdf') return true;
+      if (seen.size) return false;
+      seen.add(c.id); return true;
+    });
+  }
+  renderSelectedCommandChips();
+  if (AT_MENU_STATE.open) renderAtCommandMenuList();
+  if (toast && !opts.silent && typeof displayToastNotification === 'function') displayToastNotification(toast);
+  return true;
+}
+function _installCreateAddAutoSync() {
+  if (window.__createAddAutoSyncInstalled) return;
+  const host = document.getElementById('document-view-container');
+  if (!host) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _installCreateAddAutoSync, { once: true });
+    return;
+  }
+  window.__createAddAutoSyncInstalled = true;
+  let timer = null;
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      try { syncCreateAddCommandSelection({ silent: !!(window.APP_STATE && window.APP_STATE.isAIGenerating) }); } catch (_) { /* best-effort */ }
+    }, 400);
+  };
+  try { new MutationObserver(schedule).observe(host, { childList: true, subtree: true }); } catch (_) { /* ignore */ }
+  host.addEventListener('input', schedule, true);
+}
+_installCreateAddAutoSync();
 
 function getPrimaryIntent(sel = window.APP_STATE?.selectedCommands || []) {
   return sel.find(c => c.category === 'intent' && !['chat'].includes(c.id) && !c.implicit) ||
@@ -282,7 +384,7 @@ function getAtCommandDisabledReason(cmd) {
   }
 
   if (cmd.category === 'length') {
-    if (!sel.some(c => c.id === 'create_pdf')) return _currentAtCommandMode() === 'slides' ? 'Select @Create Slides first' : 'Select @Create PDF first';
+    if (!sel.some(c => c.id === 'create_pdf' || c.id === 'add')) return _currentAtCommandMode() === 'slides' ? 'Select @Create Slides first' : 'Select @Create PDF or @Add first';
     const other = sel.find(c => c.category === 'length' && c.id !== cmd.id);
     if (other) return `Remove @${other.label} first — choose one length`;
   }
@@ -301,7 +403,7 @@ function getAtCommandDisabledReason(cmd) {
   }
 
   if (cmd.category === 'visual') {
-    if (!sel.some(c => c.id === 'create_pdf')) return 'Select @Create PDF first';
+    if (!sel.some(c => c.id === 'create_pdf' || c.id === 'add')) return 'Select @Create PDF or @Add first';
   }
 
   if (hasChat && sel.length > 0) {
@@ -321,6 +423,7 @@ function isAtCommandDisabled(cmd) {
 function chooseAtCommandFromMenu(cmd) {
   const ta = document.getElementById('chat-input-textarea');
   if (!cmd) return;
+  cmd = resolveCreateOrAddCommand(cmd);
   const disabledReason = getAtCommandDisabledReason(cmd);
   if (disabledReason) {
     _atCommandLog('choose-blocked', { id: cmd.id, reason: disabledReason });
@@ -524,7 +627,7 @@ function pruneDependentAtCommandSelections() {
   }
 
   // Only keep length/visual/language if create_pdf is present
-  const hasCreatePdf = sel.some(c => c.id === 'create_pdf');
+  const hasCreatePdf = sel.some(c => c.id === 'create_pdf' || c.id === 'add');
   if (!hasCreatePdf) {
     const invalid = sel.filter(c => c.category === 'length' || c.id === 'canvas' || c.id === 'language');
     if (invalid.length) removed.push(...invalid);
@@ -637,7 +740,7 @@ function _buildAtCommandSearchRow() {
 function _buildAtCommandRecentRow() {
   if (AT_MENU_STATE.query) return null;
   const ids = _getRecentAtCommandIds();
-  const cmds = ids.map(id => getAtCommandById(id)).filter(Boolean).slice(0, 3);
+  const cmds = [...new Map(ids.map(id => getAtCommandById(id)).filter(Boolean).map(resolveCreateOrAddCommand).map(c => [c.id, c])).values()].slice(0, 3);
   if (!cmds.length) return null;
   const row = document.createElement('div');
   row.className = 'at-recent-row';
@@ -668,7 +771,9 @@ function _buildAtIntentGrid() {
   groups.forEach(group => {
     const memberCmds = group.members.map(id => getAtCommandById(id)).filter(Boolean);
     const selectedMember = memberCmds.find(c => hasSelectedCommand(c.id));
-    const allDisabled = memberCmds.every(c => isAtCommandDisabled(c));
+    const allDisabled = group.key === 'create'
+      ? isAtCommandDisabled(resolveCreateOrAddCommand(memberCmds[0]))
+      : memberCmds.every(c => isAtCommandDisabled(c));
     const card = document.createElement('div');
     card.className = 'at-intent-card' +
       (selectedMember ? ' selected' : '') +
@@ -677,10 +782,12 @@ function _buildAtIntentGrid() {
     card.setAttribute('role', 'option');
     card.setAttribute('aria-selected', selectedMember ? 'true' : 'false');
     if (allDisabled) {
-      card.title = getAtCommandDisabledReason(memberCmds[0]) || '';
+      card.title = getAtCommandDisabledReason(group.key === 'create' ? resolveCreateOrAddCommand(memberCmds[0]) : memberCmds[0]) || '';
     } else {
       card.onclick = () => {
-        if (memberCmds.length === 1) {
+        if (group.key === 'create') {
+          _chooseAtCommandFromNewUI(resolveCreateOrAddCommand(memberCmds[0]));
+        } else if (memberCmds.length === 1) {
           _chooseAtCommandFromNewUI(memberCmds[0]);
         } else {
           AT_MENU_STATE.expandedGroup = AT_MENU_STATE.expandedGroup === group.key ? null : group.key;
@@ -688,10 +795,12 @@ function _buildAtIntentGrid() {
         }
       };
     }
-    card.appendChild(_makeAtCommandIconEl(group.icon));
+    const _resolvedCreate = group.key === 'create' ? resolveCreateOrAddCommand(memberCmds[0]) : null;
+    const _isAddCard = !!(_resolvedCreate && _resolvedCreate.id === 'add');
+    card.appendChild(_makeAtCommandIconEl(_isAddCard ? (_resolvedCreate.icon || group.icon) : group.icon));
     const label = document.createElement('p');
     label.className = 'at-intent-label';
-    label.textContent = group.label;
+    label.textContent = _isAddCard ? 'Add' : group.label;
     card.appendChild(label);
     grid.appendChild(card);
   });
@@ -1208,4 +1317,7 @@ window.getCommandAutoParent = getCommandAutoParent;
 window.hasSelectedCommand = hasSelectedCommand;
 window.hasDocumentContentForAtCommands = hasDocumentContentForAtCommands;
 window.getPrimaryIntent = getPrimaryIntent;
+window.resolveCreateOrAddCommand = resolveCreateOrAddCommand;
+window.syncCreateAddCommandSelection = syncCreateAddCommandSelection;
+window.isCreateModeAddable = isCreateModeAddable;
 window.isDocumentOperationIntent = isDocumentOperationIntent;
