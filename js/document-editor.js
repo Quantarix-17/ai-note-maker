@@ -1405,6 +1405,30 @@ function updateSpecificPageByNumber(pageNumber, newHtml) {
   }
 }
 
+// ===== INSERT NEW CONTENT RIGHT AFTER A PAGE (used by @Add + page) =====
+// Unlike updateSpecificPageByNumber (which squeezes everything back onto ONE
+// A4 page), this puts the new material straight after the selected page's
+// content and re-paginates, so a long addition flows onto as many following
+// pages as it needs. Pages before the insertion point are untouched.
+async function insertHtmlAfterPage(pageNumber, newHtml) {
+  const n = Number.parseInt(pageNumber, 10);
+  if (!docContainer || !Number.isInteger(n) || n < 1 || typeof newHtml !== 'string' || !newHtml.trim()) return false;
+  const pages = Array.from(docContainer.querySelectorAll('.doc-page-canvas'));
+  if (n > pages.length) return false;
+  let combined = '';
+  pages.forEach((page, i) => {
+    if (typeof pageHasContent === 'function' && !pageHasContent(page) && i !== n - 1) return;
+    const clone = page.cloneNode(true);
+    clone.querySelectorAll('.page-footer-number').forEach(f => f.remove());
+    if (typeof stripEmojiFromNode === 'function') stripEmojiFromNode(clone);
+    combined += clone.innerHTML;
+    if (i === n - 1) combined += '<br>' + newHtml;
+  });
+  await setDocumentHTMLAndPaginate(combined);
+  return true;
+}
+window.insertHtmlAfterPage = insertHtmlAfterPage;
+
 function updateSpecificPagesByNumber(updates) {
   if (!Array.isArray(updates) || !updates.length) return false;
   if (!docContainer) return false;
