@@ -309,6 +309,27 @@ function isDocumentOperationIntent(id) {
   return ['add', 'edit', 'refine', 'refine_equation', 'redesign_diagram', 'beautify', 'refine_pagination'].includes(id);
 }
 
+// ===== CHAT COMPANION =====
+// @Chat used to be strictly standalone. Now, while Add / Edit / Refine /
+// Refine Equation / Redesign Diagram is selected, @Chat can stay ON next to
+// it: the message is answered with AI SUGGESTIONS (nothing in the document
+// is changed), the Add/Edit chip and its page selection stay pinned, and a
+// tap on a suggestion turns Chat off and applies it to the selected page(s).
+const AT_CHAT_COMPANION_INTENTS = ['add', 'edit', 'refine', 'refine_equation', 'redesign_diagram'];
+function _isChatCompanionIntent(id) {
+  return AT_CHAT_COMPANION_INTENTS.includes(id);
+}
+function _isChatCompatibleCommand(cmd) {
+  if (!cmd) return false;
+  if (cmd.id === 'chat') return true;
+  if (cmd.category === 'intent') return _isChatCompanionIntent(cmd.id);
+  return cmd.category === 'target' || cmd.category === 'language';
+}
+function _selectionAllowsChat(sel) {
+  return (sel || []).filter(c => c.id !== 'chat').every(_isChatCompatibleCommand);
+}
+const AT_CHAT_INCOMPATIBLE_MSG = '@Chat can only be combined with Add / Edit / Refine. Remove the other command first.';
+
 // ===== DEPENDENCY MANAGEMENT (no exam/MCQ logic) =====
 function ensureCommandDependencies(cmd, { silent = false } = {}) {
   if (!cmd) return false;
@@ -317,13 +338,15 @@ function ensureCommandDependencies(cmd, { silent = false } = {}) {
   const hasChat = sel.some(c => c.id === 'chat');
 
   if (cmd.id === 'chat') {
-    window.APP_STATE.selectedCommands = [{
-      id: 'chat', category: 'intent', label: 'Chat', icon: 'chat', param: null, implicit: false
-    }];
+    // Chat is only added by attemptAddAtCommand (never wipes other chips here).
+    if (!_selectionAllowsChat(sel)) {
+      if (!silent) showAtCommandToast(AT_CHAT_INCOMPATIBLE_MSG);
+      return false;
+    }
     return true;
   }
-  if (hasChat) {
-    if (!silent) showAtCommandToast('Remove @Chat before selecting a document command.');
+  if (hasChat && !_isChatCompatibleCommand(cmd)) {
+    if (!silent) showAtCommandToast(AT_CHAT_INCOMPATIBLE_MSG);
     return false;
   }
 
@@ -365,8 +388,8 @@ function getAtCommandDisabledReason(cmd) {
   const primary = getPrimaryIntent(sel);
   const hasExistingDocument = hasDocumentContentForAtCommands();
 
-  if (hasChat) return cmd.id === 'chat' ? null : 'Remove @Chat first — @Chat is standalone';
-  if (cmd.id === 'chat' && sel.length > 0) return 'Remove the current command(s) first — @Chat is standalone';
+  if (hasChat && cmd.id !== 'chat' && !_isChatCompatibleCommand(cmd)) return 'Remove @Chat first — Chat only works together with Add / Edit / Refine';
+  if (cmd.id === 'chat' && sel.length > 0 && !_selectionAllowsChat(sel)) return 'Chat only works together with Add / Edit / Refine — remove the current command(s) first';
 
   // Defensive net for mode-restricted commands (see getModeFilteredAtCommands):
   // the menu never renders these outside their mode, but a chip added
@@ -406,11 +429,6 @@ function getAtCommandDisabledReason(cmd) {
     if (!sel.some(c => c.id === 'create_pdf' || c.id === 'add')) return 'Select @Create PDF or @Add first';
   }
 
-  if (hasChat && sel.length > 0) {
-    if (cmd.id === 'chat') return null;
-    return 'Remove @Chat first — @Chat is standalone';
-  }
-
   return null;
 }
 
@@ -445,6 +463,13 @@ function chooseAtCommandFromMenu(cmd) {
   // conversion in buildIntentPayload(), keep working unchanged.
   if (cmd.id === 'create_pdf' && window.APP_STATE && window.APP_STATE.creationMode === 'slides') {
     cmd = Object.assign({}, cmd, { label: 'Create Slides', icon: 'slides' });
+  }
+
+  // Tapping @Chat again while it rides along with Add/Edit turns it OFF.
+  if (cmd.id === 'chat' && hasSelectedCommand('chat') && window.APP_STATE.selectedCommands.some(c => c.id !== 'chat')) {
+    removeSelectedAtCommand('chat');
+    if (AT_MENU_STATE.open) renderAtCommandMenuList();
+    return;
   }
 
   _atCommandLog('choose-start', { id: cmd.id, label: cmd.label, hasParam: !!cmd.hasParam, mode: AT_MENU_STATE.mode });
@@ -485,6 +510,23 @@ function chooseAtCommandFromMenu(cmd) {
       } else {
         if (ta) ta.focus();
       }
+    });
+    return;
+  }
+
+  // @Page (target of Add / Refine / ...) now uses the same page picker as
+  // @Edit instead of dropping a raw "@page:" into the textbox. The typed
+  // "@page:2 3" form still works (parseAndStripInlineCommandTokens).
+  if (cmd.id === 'page' && typeof openEditPageModal === 'function') {
+    if (!ensureCommandDependencies(cmd, { silent: false })) return;
+    openEditPageModal().then(pages => {
+      if (pages && pages.length > 0) {
+        attemptAddAtCommand(cmd, pages.join(' '));
+        renderSelectedCommandChips();
+        if (AT_MENU_STATE.open) renderAtCommandMenuList();
+      }
+      if (ta) { autoResizeTextarea(ta);
+        if (!isMobilePreviewMode()) ta.focus(); }
     });
     return;
   }
@@ -552,9 +594,8 @@ function attemptAddAtCommand(cmd, param, options = {}) {
   let sel = window.APP_STATE.selectedCommands;
 
   if (cmd.id === 'chat') {
-    const hasNonChat = sel.some(c => c.id !== 'chat');
-    if (hasNonChat) {
-      showAtCommandToast('@Chat cannot be combined with document commands. Remove the current commands first.');
+    if (!_selectionAllowsChat(sel)) {
+      showAtCommandToast(AT_CHAT_INCOMPATIBLE_MSG);
       return false;
     }
     if (!sel.some(c => c.id === 'chat')) {
@@ -564,8 +605,8 @@ function attemptAddAtCommand(cmd, param, options = {}) {
     return true;
   }
 
-  if (sel.some(c => c.id === 'chat')) {
-    showAtCommandToast('@Chat cannot be combined with document commands.');
+  if (sel.some(c => c.id === 'chat') && !_isChatCompatibleCommand(cmd)) {
+    showAtCommandToast(AT_CHAT_INCOMPATIBLE_MSG);
     return false;
   }
 
@@ -574,7 +615,7 @@ function attemptAddAtCommand(cmd, param, options = {}) {
   sel = window.APP_STATE.selectedCommands;
 
   if (cmd.category === 'intent') {
-    const existingPrimary = sel.find(c => c.category === 'intent' && c.id !== cmd.id && c.id !== cmd.autoParent);
+    const existingPrimary = sel.find(c => c.category === 'intent' && c.id !== 'chat' && c.id !== cmd.id && c.id !== cmd.autoParent);
     if (existingPrimary) {
       window.APP_STATE.selectedCommands = sel.filter(c => c.id !== existingPrimary.id);
       sel = window.APP_STATE.selectedCommands;
@@ -582,7 +623,7 @@ function attemptAddAtCommand(cmd, param, options = {}) {
   }
 
   if (cmd.category !== 'content') {
-    const existingSameCategory = sel.find(c => c.category === cmd.category && c.id !== cmd.id && !c.implicit);
+    const existingSameCategory = sel.find(c => c.category === cmd.category && c.id !== 'chat' && c.id !== cmd.id && !c.implicit);
     if (existingSameCategory) {
       const idx = sel.indexOf(existingSameCategory);
       if (idx > -1) sel.splice(idx, 1);
@@ -620,10 +661,13 @@ function pruneDependentAtCommandSelections() {
   const removed = [];
 
   if (sel.some(c => c.id === 'chat')) {
-    const chat = sel.find(c => c.id === 'chat');
-    const extras = sel.filter(c => c.id !== 'chat');
-    if (extras.length) removed.push(...extras);
-    sel = [chat];
+    // Chat may stay next to Add/Edit/Refine (+ their page/language chips);
+    // anything else can't coexist with it.
+    const bad = sel.filter(c => c.id !== 'chat' && !_isChatCompatibleCommand(c));
+    if (bad.length) {
+      removed.push(...bad);
+      sel = sel.filter(c => !bad.includes(c));
+    }
   }
 
   // Only keep length/visual/language if create_pdf is present
@@ -844,6 +888,37 @@ function _buildAtSubscopePanel() {
   return panel;
 }
 
+function _buildAtChatCompanionRow() {
+  const sel = window.APP_STATE ? window.APP_STATE.selectedCommands : [];
+  const primary = getPrimaryIntent(sel);
+  if (!primary || !_isChatCompanionIntent(primary.id)) return null;
+  const chatCmd = getAtCommandById('chat');
+  if (!chatCmd) return null;
+  const on = sel.some(c => c.id === 'chat');
+
+  const wrap = document.createElement('div');
+  wrap.className = 'at-modifier-wrap at-chat-companion-wrap';
+  const label = document.createElement('p');
+  label.className = 'at-modifier-label';
+  label.textContent = 'Ask AI first (optional)';
+  wrap.appendChild(label);
+  const row = document.createElement('div');
+  row.className = 'at-modifier-row';
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'at-modifier-chip' + (on ? ' selected' : '');
+  chip.textContent = on ? 'Chat ON: AI suggests, nothing is changed' : 'Chat: get AI suggestions';
+  chip.title = 'Keeps ' + primary.label + ' selected. The AI only suggests; tap a suggestion to apply it.';
+  chip.onclick = () => {
+    if (on) removeSelectedAtCommand('chat');
+    else attemptAddAtCommand(chatCmd, null);
+    renderAtCommandMenuList();
+  };
+  row.appendChild(chip);
+  wrap.appendChild(row);
+  return wrap;
+}
+
 function _buildAtModifierRow() {
   const modifierCmds = AT_MENU_STATE.filtered.filter(c => ['length', 'target', 'language', 'visual'].includes(c.category));
   if (!modifierCmds.length) return null;
@@ -953,6 +1028,9 @@ function renderAtCommandMenuList() {
     empty.textContent = 'No matching commands';
     commandSection.appendChild(empty);
   }
+
+  const chatCompanionRow = _buildAtChatCompanionRow();
+  if (chatCompanionRow) commandSection.appendChild(chatCompanionRow);
 
   const modifierRow = _buildAtModifierRow();
   if (modifierRow) commandSection.appendChild(modifierRow);
@@ -1178,24 +1256,26 @@ function buildIntentPayload() {
   if (!window.APP_STATE) return null;
   const sel = window.APP_STATE.selectedCommands;
   const findCat = cat => sel.find(c => c.category === cat);
-  const intentCmd = sel.find(c => c.category === 'intent' && !c.implicit) || findCat('intent');
+  // Chat can now ride along with Add/Edit/..., so prefer the real (non-chat)
+  // intent; plain @Chat is only the intent when nothing else is selected.
+  const chatSelected = sel.some(c => c.id === 'chat');
+  const intentCmd = getPrimaryIntent(sel) || sel.find(c => c.id === 'chat') || null;
   if (!intentCmd) return null;
   const lengthCmd = findCat('length');
   const targetCmd = findCat('target');
   const languageCmd = findCat('language');
   const visualCmd = findCat('visual');
 
-  const pageNumbers = (targetCmd && targetCmd.param ? targetCmd.param : '')
-    .split(/[\s,]+/).map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0);
-  let pageTarget = pageNumbers.length ? pageNumbers[0] : null;
-  if (intentCmd.id === 'edit' && intentCmd.param) {
-    const parts = intentCmd.param.split(/\s+/).filter(p => p.length > 0);
-    const nums = parts.map(n => parseInt(n, 10)).filter(n => !isNaN(n) && n > 0);
-    if (nums.length > 0) {
-      pageTarget = nums[0];
-      pageNumbers.push(...nums.slice(1));
-    }
-  }
+  // Page numbers come from BOTH the intent chip (the @Edit:3 style param) and
+  // the @Page target chip. The old code dropped the first page of the
+  // @Edit param (only nums.slice(1) was kept), so a single selected page
+  // produced an empty page list and the page picker re-opened on send.
+  const parsePages = str => (str || '').split(/[\s,]+/).map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0);
+  const PAGE_PARAM_INTENTS = ['edit', 'refine', 'refine_equation', 'redesign_diagram'];
+  const intentPages = PAGE_PARAM_INTENTS.includes(intentCmd.id) ? parsePages(intentCmd.param) : [];
+  const targetPages = parsePages(targetCmd && targetCmd.param);
+  const pageNumbers = [...new Set([...intentPages, ...targetPages])].sort((a, b) => a - b);
+  const pageTarget = pageNumbers.length ? pageNumbers[0] : null;
 
   // The @ menu only ever exposes a single "New document" creation command
   // (create_pdf). Which kind of thing that actually produces — a PDF/Word
@@ -1214,8 +1294,11 @@ function buildIntentPayload() {
     visual: visualCmd ? visualCmd.id : null,
     sectionMode: typeof getSectionModeEnabled === 'function' ? getSectionModeEnabled() : false,
     refinePaginationPage: (intentCmd.id === 'refine_pagination' && intentCmd.param) ? parseInt(intentCmd.param, 10) : null,
-    pageNumbers: [...new Set(pageNumbers)],
-    editPages: intentCmd.id === 'edit' ? [...new Set(pageNumbers)] : null,
+    pageNumbers: pageNumbers,
+    editPages: ['edit', 'refine', 'refine_equation'].includes(intentCmd.id) ? pageNumbers.slice() : null,
+    // true when @Chat is switched on next to Add/Edit/Refine: the AI must
+    // only SUGGEST (no document change) and the chips stay pinned.
+    chatCompanion: !!(chatSelected && intentCmd.id !== 'chat'),
     // Set only when the "@Edit Slide N" chip (pinned via the pencil icon in
     // the slide thumbnail rail — see slide-studio.js:startSlideAIEditCommand)
     // is the active command. 1-based slide number, or null otherwise.
@@ -1258,7 +1341,11 @@ function buildAtCommandInstructionText(intentPayload) {
     if (intentPayload.editPages && intentPayload.editPages.length) parts.push(`SELECTED EDIT PAGES: ${intentPayload.editPages.join(', ')}.`);
   }
   if (intentPayload.intent === 'add') {
-    parts.push('ADD SAFETY: Append the requested new material. Never replace or delete existing content. If pages are selected, preserve their existing content while adding to those pages; create continuation pages when needed.');
+    if (intentPayload.pageNumbers && intentPayload.pageNumbers.length) {
+      parts.push(`ADD SAFETY (PAGE-SCOPED): Add the requested material ONLY to page(s) ${intentPayload.pageNumbers.join(', ')}. Return update_page (one page) or update_pages (EVERY selected page) containing that page's full existing content plus the new material. Never use append_content, prepend_content or replace_all, and never touch unselected pages.`);
+    } else {
+      parts.push('ADD SAFETY: Append the requested new material. Never replace or delete existing content; create continuation pages when needed.');
+    }
   }
   if (intentPayload.intent === 'redesign_diagram') {
     parts.push('REDESIGN SAFETY: Create a genuinely new visual design and replace the old diagram with the new complete diagram. Do not return a partial patch or preserve the old layout unchanged.');
@@ -1321,3 +1408,21 @@ window.resolveCreateOrAddCommand = resolveCreateOrAddCommand;
 window.syncCreateAddCommandSelection = syncCreateAddCommandSelection;
 window.isCreateModeAddable = isCreateModeAddable;
 window.isDocumentOperationIntent = isDocumentOperationIntent;
+window.isChatCompatibleCommand = _isChatCompatibleCommand;
+// ===== PINNING: keep Add / Edit / Refine + their page selection after send =====
+// Before, every chip except @Chat / Edit Slide was cleared after one send, so
+// the next message had no command (and no page) and the user was asked to
+// pick the page again. A page-scoped Add/Edit/Refine chip, its @Page chip and
+// @Chat (when on) now stay pinned until the user removes them by hand.
+function keepAtCommandAfterSend(c, sel) {
+  if (!c) return false;
+  if (c.id === 'edit_slide' || c.id === 'custom_background') return true;
+  const list = sel || (window.APP_STATE && window.APP_STATE.selectedCommands) || [];
+  const primary = getPrimaryIntent(list);
+  const pinnedIntent = !!(primary && _isChatCompanionIntent(primary.id) &&
+    (primary.param || list.some(x => x.category === 'target' && x.param)));
+  if (c.id === 'chat') return list.length === 1 || pinnedIntent || list.some(x => x.id === 'edit_slide' || x.id === 'custom_background');
+  if (!pinnedIntent) return false;
+  return c.id === primary.id || (c.category === 'target' && !!c.param) || c.category === 'language';
+}
+window.keepAtCommandAfterSend = keepAtCommandAfterSend;
