@@ -1206,13 +1206,23 @@ function buildSharedRules(isMonochromeMode, outputLanguage) {
     RULE: Put EXACTLY one placeholder comment — <!--ELEMENT:element_id:size=NN|x=NN|y=NN|color=#hex|color2=#hex|rotate=deg--> — at the exact point inside your <svg>...</svg> markup where the element should appear (mixed freely alongside your own hand-drawn shapes), or alone inside a figure-frame for a standalone icon figure. x/y is the element's position in your own SVG's coordinate space; size is its final width/height there (any number — pick whatever fits your layout); rotate/color/color2 are optional. Only "element_id" is required; all params may be omitted for sensible defaults. Use an exact id from the list above — never invent one. This rule applies only to the small pieces listed above; for every other figure, drawing, diagram or illustration, continue to hand-draw the SVG yourself following sections 1-10 below.
   ` : '';
 
+  // Illustrations are PDF/Word-only and opt-in through the @Canvas chip.
+  // undefined (not set by a send, e.g. slides) = unchanged behaviour.
+  const illustrationsOff = APP_STATE.canvasIllustrationsEnabled === false;
+  const illustrationsOffRule = illustrationsOff ? `
+    === ILLUSTRATIONS ARE OFF FOR THIS REQUEST (MANDATORY, OVERRIDES SECTIONS 0C, 0D AND 9) ===
+    The user did NOT turn on Canvas, so do NOT add any illustration: no decorative scenes, artwork, drawings of people/animals/plants/buildings/objects, clipart, icon pictures, <!--ILLUSTRATION:...--> or <!--ELEMENT:...--> placeholders and no hand-drawn representational SVG art.
+    Other figures are still welcome wherever they genuinely help: data charts (<!--CHART:...--> placeholder), graphs, tables, geometry/math figures, timelines and formula/callout boxes. Existing figures already in the document must be preserved exactly.
+  ` : '';
+
   const superFigureRules = `
+    ${illustrationsOffRule}
     === SUPER-HIGH-QUALITY FIGURE / DRAWING ENGINE (MANDATORY) ===
     Treat every requested figure, drawing, chart, graph, illustration, timeline, geometry figure, artwork, or visual explanation as a PROFESSIONAL VISUAL — never as a crude placeholder. Diagrams, schematics, anatomy figures, process/flow maps, concept maps and mind maps are OUT OF SCOPE here — see section 0 above, which permanently disables them; render that content as text instead. This engine covers everything from data charts to freeform SVG illustrations/artwork of trees, plants, people, animals, nature scenes, objects, or any other representational subject the user asks to see drawn. See section 9 (SVG ILLUSTRATION / ARTWORK MODE) for the rules specific to representational art, and section 0C below FIRST for decorative flat-design scenes (landscapes, city skylines, thinking-person figures, nature portraits, icon badges) that the code-composed illustration library already covers.
     ${diagramTemplateRule}
     ${chartTemplateRule}
-    ${illustrationTemplateRule}
-    ${elementTemplateRule}
+    ${illustrationsOff ? '' : illustrationTemplateRule}
+    ${illustrationsOff ? '' : elementTemplateRule}
     1. OUTPUT FORMAT:
       - Prefer self-contained inline SVG for diagrams, scientific figures, charts, schematics, explanatory drawings, and representational illustrations/artwork alike.
       - Wrap every major visual in:
@@ -3361,6 +3371,12 @@ async function sendChatPromptToAI() {
     }
 
     const requestSessionId = APP_STATE.activeSessionId;
+    // Canvas chip = illustrations ON for PDF/Word. Slides keep their own behaviour.
+    if (['create_slides', 'edit_slide', 'custom_background'].includes(intentPayload.intent)) {
+      APP_STATE.canvasIllustrationsEnabled = undefined;
+    } else {
+      APP_STATE.canvasIllustrationsEnabled = intentPayload.visual === 'canvas';
+    }
     inputField.value = '';
     inputField.style.height = 'auto';
     if (typeof appendChatMessageToUI === 'function') appendChatMessageToUI('user', promptText);
