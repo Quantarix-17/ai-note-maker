@@ -18,8 +18,18 @@ function _currentAtCommandMode() {
 }
 function getModeFilteredAtCommands() {
   const mode = _currentAtCommandMode();
-  return AT_COMMANDS.filter(c => !c.modes || c.modes.includes(mode));
+  // The @Language command was removed from the menu (output language is set in
+  // the Format tab / follows the request), so it is never offered here.
+  return AT_COMMANDS.filter(c => c.id !== 'language' && (!c.modes || c.modes.includes(mode)));
 }
+
+// ===== FRIENDLIER LENGTH NAMES (PDF mode) =====
+// "Long PDF" -> "Detailed", "Short PDF" -> "Compact". Only the display label
+// changes; ids (long_pdf / short_pdf) and every check built on them stay.
+const AT_LABEL_OVERRIDES = { long_pdf: 'Detailed', short_pdf: 'Compact', redesign_diagram: 'Redesign Figure' };
+try {
+  AT_COMMANDS.forEach(c => { if (c && AT_LABEL_OVERRIDES[c.id]) c.label = AT_LABEL_OVERRIDES[c.id]; });
+} catch (_) { /* label stays as defined in constants.js */ }
 
 // ===== STATE =====
 const AT_MENU_STATE = {
@@ -28,7 +38,7 @@ const AT_MENU_STATE = {
   triggerStart: -1,
   highlightIndex: 0,
   section: 'commands',
-  filtered: getOrderedAtCommands(AT_COMMANDS),
+  filtered: getOrderedAtCommands(getModeFilteredAtCommands()),
   query: '',
   expandedGroup: null
 };
@@ -57,7 +67,7 @@ const AT_SUBSCOPE_LABELS = {
   edit: 'Everything',
   refine: 'Text',
   refine_equation: 'Equation',
-  redesign_diagram: 'Diagram'
+  redesign_diagram: 'Figure'
 };
 const AT_RECENTS_KEY = 'atCommandRecents_v1';
 function _recordRecentAtCommand(id) {
@@ -311,7 +321,7 @@ function isDocumentOperationIntent(id) {
 
 // ===== CHAT COMPANION =====
 // @Chat used to be strictly standalone. Now, while Add / Edit / Refine /
-// Refine Equation / Redesign Diagram is selected, @Chat can stay ON next to
+// Refine Equation / Redesign Figure is selected, @Chat can stay ON next to
 // it: the message is answered with AI SUGGESTIONS (nothing in the document
 // is changed), the Add/Edit chip and its page selection stay pinned, and a
 // tap on a suggestion turns Chat off and applies it to the selected page(s).
@@ -415,7 +425,7 @@ function getAtCommandDisabledReason(cmd) {
   if (cmd.category === 'target') {
     if (!hasExistingDocument) return 'Create/open a document first';
     if (!primary || !isDocumentOperationIntent(primary.id)) {
-      return 'Select @Edit, @Refine, @Refine Equation, @Redesign Diagram, @Beautify, or @Refine Pagination first';
+      return 'Select @Edit, @Refine, @Refine Equation, @Redesign Figure, @Beautify, or @Refine Pagination first';
     }
   }
 
@@ -514,14 +524,22 @@ function chooseAtCommandFromMenu(cmd) {
     return;
   }
 
-  // @Page (target of Add / Refine / ...) now uses the same page picker as
-  // @Edit instead of dropping a raw "@page:" into the textbox. The typed
-  // "@page:2 3" form still works (parseAndStripInlineCommandTokens).
-  if (cmd.id === 'page' && typeof openEditPageModal === 'function') {
+  // Every page-number command (@Page, and @Refine Pagination) now uses the SAME
+  // page-picker modal as Edit -> Everything, instead of inserting "@page:" /
+  // "@refine_pagination:" into the typing field. Typing the token by hand
+  // still works as a fallback (parseAndStripInlineCommandTokens).
+  const _isPageNumberCmd = cmd.id === 'page' || cmd.id === 'refine_pagination' || cmd.category === 'target';
+  if (_isPageNumberCmd && typeof openEditPageModal === 'function') {
     if (!ensureCommandDependencies(cmd, { silent: false })) return;
-    openEditPageModal().then(pages => {
+    const _existingPage = window.APP_STATE.selectedCommands.find(c => c.id === cmd.id);
+    Promise.resolve(openEditPageModal()).then(pages => {
       if (pages && pages.length > 0) {
-        attemptAddAtCommand(cmd, pages.join(' '));
+        let list = pages;
+        if (cmd.id === 'refine_pagination' && pages.length > 1) {
+          list = [pages[0]];
+          displayToastNotification('Refine Pagination works on one page — using page ' + pages[0] + '.');
+        }
+        attemptAddAtCommand(cmd, list.join(' '));
         renderSelectedCommandChips();
         if (AT_MENU_STATE.open) renderAtCommandMenuList();
       }
@@ -1231,12 +1249,6 @@ function parseAndStripInlineCommandTokens(text) {
     attemptAddAtCommand(pageCmd, pageMatch[1].replace(/\s*,\s*/g, ' ').replace(/\s+/g, ' ').trim());
     result = result.replace(pageCmd.paramPattern, '').trim();
   }
-  const langCmd = getAtCommandById('language');
-  const langMatch = result.match(langCmd.paramPattern);
-  if (langMatch) {
-    attemptAddAtCommand(langCmd, langMatch[1]);
-    result = result.replace(langCmd.paramPattern, '').trim();
-  }
   const refineAlias = /@refine\b/i;
   if (refineAlias.test(result) && !/@refine_(equation|pagination)\b/i.test(result)) {
     attemptAddAtCommand(getAtCommandById('refine'), null, { silentParent: true });
@@ -1325,7 +1337,7 @@ function buildAtCommandInstructionText(intentPayload) {
     refine: 'REFINE — inspect the requested part and improve it while preserving useful information',
     refine_equation: 'REFINE EQUATION — fix ONLY the equation/KaTeX portions, leave everything else untouched',
     beautify: 'BEAUTIFY — improve styling/formatting only, do NOT change the actual wording/content',
-    redesign_diagram: 'REDESIGN DIAGRAM — redesign the chart/diagram/flowchart',
+    redesign_diagram: 'REDESIGN FIGURE — redesign the figure (chart, graph, diagram, flowchart, illustration, table or any other visual)',
     refine_pagination: 'REFINE PAGINATION — fix ONLY the pagination/page-break of the specified page, leave all actual content and wording untouched'
   };
   const parts = [`INTENT: ${intentLabels[intentPayload.intent] || intentPayload.intent}`];
@@ -1348,7 +1360,7 @@ function buildAtCommandInstructionText(intentPayload) {
     }
   }
   if (intentPayload.intent === 'redesign_diagram') {
-    parts.push('REDESIGN SAFETY: Create a genuinely new visual design and replace the old diagram with the new complete diagram. Do not return a partial patch or preserve the old layout unchanged.');
+    parts.push('REDESIGN SAFETY: Create a genuinely new visual design and replace the old figure with the new complete figure. Do not return a partial patch or preserve the old layout unchanged.');
   }
 
   if (intentPayload.length === 'long_pdf') {
@@ -1369,8 +1381,15 @@ function buildAtCommandInstructionText(intentPayload) {
     parts.push(`LANGUAGE: Write the entire output in "${intentPayload.language}". Do not mix in other languages unless technical terms require it.`);
   }
 
+  const isSlideIntent = ['create_slides', 'edit_slide', 'custom_background'].includes(intentPayload.intent);
   if (intentPayload.visual === 'canvas') {
-    parts.push('VISUAL SUPPORT: CANVAS — MANDATORY, NOT OPTIONAL: the user explicitly turned on Canvas, so this response MUST include at least one genuine visual figure — a real hand-drawn <svg>...</svg> illustration/diagram, a <!--DIAGRAM_TEMPLATE:id--> placeholder, or a <!--CHART:type:...--> data-chart placeholder — somewhere in the generated content. This applies even if you judge the topic could be explained in text alone; find or design a genuinely relevant diagram, concept map, comparison chart, or illustrative artwork for the subject and include it regardless. There must never be zero figures in a Canvas-selected response. If the content naturally supports more than one figure, include all of them, but at minimum one is required.');
+    if (isSlideIntent) {
+      parts.push('VISUAL SUPPORT: CANVAS — MANDATORY, NOT OPTIONAL: the user explicitly turned on Canvas, so this response MUST include at least one genuine visual figure — a real hand-drawn <svg>...</svg> illustration/diagram, a <!--DIAGRAM_TEMPLATE:id--> placeholder, or a <!--CHART:type:...--> data-chart placeholder — somewhere in the generated content. This applies even if you judge the topic could be explained in text alone; find or design a genuinely relevant diagram, concept map, comparison chart, or illustrative artwork for the subject and include it regardless. There must never be zero figures in a Canvas-selected response. If the content naturally supports more than one figure, include all of them, but at minimum one is required.');
+    } else {
+      parts.push('ILLUSTRATIONS: ON (user turned Canvas on) — MANDATORY: the document MUST include at least one genuine ILLUSTRATION — a flat-design scene/artwork/icon-style picture (use the <!--ILLUSTRATION:...--> placeholder when the catalog has a near-exact match, otherwise a well-made hand-drawn <svg> illustration) that is relevant to the topic. A data chart or table alone does NOT satisfy this. Add more illustrations where the content naturally supports them. Other figures (charts, graphs, tables, geometry figures) may still be used alongside.');
+    }
+  } else if (!isSlideIntent && ['create_pdf', 'add', 'edit', 'refine'].includes(intentPayload.intent)) {
+    parts.push('ILLUSTRATIONS: OFF (Canvas not selected) — do NOT add any illustration: no decorative scenes, artwork, people/animals/plants/objects drawings, clipart, icons-as-pictures, <!--ILLUSTRATION:...--> or <!--ELEMENT:...--> placeholders. Other figures ARE still allowed and encouraged where they help: data charts (<!--CHART:...-->), graphs, tables, geometry/math figures, timelines and formula/callout boxes. Existing figures already in the document must be preserved exactly.');
   }
 
   return `\n\n=== USER EXPLICIT @ COMMAND SELECTION (SOURCE OF TRUTH — follow exactly, do NOT guess intent from free text) ===\nUser explicitly selected: ${parts.join('; ')}.\n=== END @ COMMAND SELECTION ===\n`;
