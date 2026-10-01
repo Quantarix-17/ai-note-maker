@@ -3157,6 +3157,50 @@ function _setPendingClarifyState(intentId, originalPrompt, question) {
   APP_STATE.pendingClarify = { intent: intentId, originalPrompt, question, qaHistory };
 }
 
+// ===== OPTION-ONLY INPUT LOCK =====
+// While the AI is showing tap-to-choose options, the chat box is locked: the
+// only way forward is tapping an option, or tapping "Write my own answer"
+// which unlocks the box for free typing.
+const _CLARIFY_LOCK_PLACEHOLDER = 'Choose one of the options above (or tap "Write my own answer")';
+function _lockChatInputForOptions(msgDiv) {
+  APP_STATE.clarifyInputLock = { el: msgDiv || null };
+  const ta = document.getElementById('chat-input-textarea');
+  if (ta) {
+    if (ta.dataset.prevPlaceholder === undefined) ta.dataset.prevPlaceholder = ta.placeholder || '';
+    ta.readOnly = true;
+    ta.value = '';
+    ta.placeholder = _CLARIFY_LOCK_PLACEHOLDER;
+    ta.classList.add('clarify-locked');
+    ta.style.opacity = '0.6';
+    ta.style.cursor = 'not-allowed';
+  }
+  const sendBtn = document.getElementById('send-message-btn');
+  if (sendBtn) sendBtn.disabled = true;
+}
+function _unlockChatInput() {
+  APP_STATE.clarifyInputLock = null;
+  const ta = document.getElementById('chat-input-textarea');
+  if (ta) {
+    ta.readOnly = false;
+    ta.classList.remove('clarify-locked');
+    ta.style.opacity = '';
+    ta.style.cursor = '';
+    if (ta.dataset.prevPlaceholder !== undefined) { ta.placeholder = ta.dataset.prevPlaceholder; delete ta.dataset.prevPlaceholder; }
+  }
+  const sendBtn = document.getElementById('send-message-btn');
+  if (sendBtn && !APP_STATE.isAIGenerating) sendBtn.disabled = false;
+}
+// True while typing/sending must be refused. Self-heals if the options
+// bubble was removed (new chat, session switch, cleared history).
+function _isChatInputLockedForOptions() {
+  const lock = APP_STATE.clarifyInputLock;
+  if (!lock) return false;
+  if (lock.el && !lock.el.isConnected) { _unlockChatInput(); return false; }
+  return true;
+}
+window._unlockChatInput = _unlockChatInput;
+window._isChatInputLockedForOptions = _isChatInputLockedForOptions;
+
 function appendClarifyMessageToUI(question, options) {
   const questionHtml = `<div class="clarify-question">${_clarifyEscapeHtml(question)}</div>`;
   const msgDiv = typeof appendChatMessageToUI === 'function' ? appendChatMessageToUI('ai', questionHtml) : null;
@@ -3180,6 +3224,7 @@ function appendClarifyMessageToUI(question, options) {
     btn.textContent = optText;
     btn.addEventListener('click', () => {
       lockOthers(btn);
+      _unlockChatInput();
       const inputField = document.getElementById('chat-input-textarea');
       if (inputField) inputField.value = optText;
       if (typeof sendChatPromptToAI === 'function') sendChatPromptToAI();
@@ -3193,6 +3238,7 @@ function appendClarifyMessageToUI(question, options) {
   customBtn.textContent = '✍️ Write my own answer';
   customBtn.addEventListener('click', () => {
     lockOthers(customBtn);
+    _unlockChatInput();
     const inputField = document.getElementById('chat-input-textarea');
     if (inputField) { inputField.value = ''; inputField.focus(); }
     if (typeof displayToastNotification === 'function') displayToastNotification('Type your answer and send it below.');
@@ -3200,6 +3246,9 @@ function appendClarifyMessageToUI(question, options) {
   wrap.appendChild(customBtn);
 
   msgDiv.appendChild(wrap);
+  // Always lock, even when the AI gave no options (e.g. the "what topic?" question):
+  // the only way to type is the "Write my own answer" button.
+  _lockChatInputForOptions(msgDiv);
   const chatHistoryArea = document.getElementById('chat-history');
   if (chatHistoryArea) chatHistoryArea.scrollTop = chatHistoryArea.scrollHeight;
   return msgDiv;
@@ -3216,66 +3265,54 @@ function appendClarifyMessageToUI(question, options) {
 // and immediately submits it as the next message, same as clicking a
 // normal clarify option pill.
 function appendCategoryClarifyMessageToUI(question, categories) {
-  const questionHtml = `<div class="clarify-question">${_clarifyEscapeHtml(question)}</div>`;
-  const msgDiv = typeof appendChatMessageToUI === 'function' ? appendChatMessageToUI('ai', questionHtml) : null;
-  if (!msgDiv || !msgDiv.appendChild) return msgDiv;
+  // Same tap-to-select option pills as every other question (no tick boxes).
+  const labels = (Array.isArray(categories) ? categories : [])
+    .map(cat => (cat && cat.label) ? String(cat.label) : String((cat && cat.id) || ''))
+    .filter(Boolean);
+  return appendClarifyMessageToUI(question, labels);
+}
 
+// Suggestion bubble for @Chat + Add/Edit/Refine. Tapping a suggestion turns
+// Chat off (so it is really applied) while the Add/Edit chip and its page
+// selection stay pinned, then sends the suggestion.
+function appendSuggestionMessageToUI(message, suggestions) {
+  const msgDiv = typeof appendChatMessageToUI === 'function'
+    ? appendChatMessageToUI('ai', `<div class="clarify-question">${_clarifyEscapeHtml(message || '')}</div>`) : null;
+  if (!msgDiv || !msgDiv.appendChild || !suggestions || !suggestions.length) return msgDiv;
   const wrap = document.createElement('div');
-  wrap.className = 'clarify-options clarify-category-options';
-
-  const lockAll = (selectedEl) => {
-    wrap.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.disabled = true; });
-    wrap.querySelectorAll('.clarify-option-btn').forEach(b => { b.disabled = true; if (b !== selectedEl) b.classList.add('clarify-option-disabled'); });
-    wrap.querySelectorAll('.clarify-category-checkbox').forEach(row => { if (row !== selectedEl) row.classList.add('clarify-option-disabled'); });
-  };
-
-  const submitAnswer = (answerText) => {
-    const inputField = document.getElementById('chat-input-textarea');
-    if (inputField) inputField.value = answerText;
-    if (typeof sendChatPromptToAI === 'function') sendChatPromptToAI();
-  };
-
-  (Array.isArray(categories) ? categories : []).forEach(cat => {
-    const label = (cat && cat.label) ? String(cat.label) : String(cat && cat.id || '');
-    if (!label) return;
-    const row = document.createElement('label');
-    row.className = 'clarify-category-checkbox';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.className = 'clarify-category-checkbox-input';
-    const textSpan = document.createElement('span');
-    textSpan.className = 'clarify-category-checkbox-label';
-    textSpan.textContent = label;
-    row.appendChild(cb);
-    row.appendChild(textSpan);
-    cb.addEventListener('change', () => {
-      if (!cb.checked) return;
-      // Single-select behavior even though these render as checkboxes — a
-      // deck belongs to exactly one content category.
-      wrap.querySelectorAll('.clarify-category-checkbox-input').forEach(other => { if (other !== cb) other.checked = false; });
-      row.classList.add('clarify-option-selected');
-      lockAll(row);
-      submitAnswer(label);
+  wrap.className = 'clarify-options';
+  suggestions.forEach(sg => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'clarify-option-btn';
+    btn.textContent = String(sg.label || sg.prompt);
+    btn.addEventListener('click', () => {
+      wrap.querySelectorAll('.clarify-option-btn').forEach(b => { b.disabled = true; if (b !== btn) b.classList.add('clarify-option-disabled'); });
+      btn.classList.add('clarify-option-selected');
+      _unlockChatInput();
+      if (typeof removeSelectedAtCommand === 'function') removeSelectedAtCommand('chat');
+      const inputField = document.getElementById('chat-input-textarea');
+      if (inputField) inputField.value = String(sg.prompt || sg.label);
+      if (typeof sendChatPromptToAI === 'function') sendChatPromptToAI();
     });
-    wrap.appendChild(row);
+    wrap.appendChild(btn);
   });
-
   const customBtn = document.createElement('button');
   customBtn.type = 'button';
   customBtn.className = 'clarify-option-btn clarify-option-custom';
-  customBtn.textContent = '✍️ Write my own answer';
+  customBtn.textContent = '✍️ Write my own';
   customBtn.addEventListener('click', () => {
-    lockAll(customBtn);
+    wrap.querySelectorAll('.clarify-option-btn').forEach(b => { b.disabled = true; });
     customBtn.classList.add('clarify-option-selected');
+    _unlockChatInput();
     const inputField = document.getElementById('chat-input-textarea');
     if (inputField) { inputField.value = ''; inputField.focus(); }
-    if (typeof displayToastNotification === 'function') displayToastNotification('Type your answer and send it below.');
   });
   wrap.appendChild(customBtn);
-
   msgDiv.appendChild(wrap);
-  const chatHistoryArea = document.getElementById('chat-history');
-  if (chatHistoryArea) chatHistoryArea.scrollTop = chatHistoryArea.scrollHeight;
+  _lockChatInputForOptions(msgDiv);
+  const area = document.getElementById('chat-history');
+  if (area) area.scrollTop = area.scrollHeight;
   return msgDiv;
 }
 
@@ -3286,6 +3323,10 @@ function appendCategoryClarifyMessageToUI(question, categories) {
 async function sendChatPromptToAI() {
   try {
     const inputField = document.getElementById('chat-input-textarea');
+    if (_isChatInputLockedForOptions()) {
+      if (typeof displayToastNotification === 'function') displayToastNotification('Please choose one of the options above, or tap "Write my own answer".');
+      return;
+    }
     const rawInputValue = inputField.value;
     if (!rawInputValue.trim()) return;
     if (APP_STATE.isAIGenerating) return;
@@ -3349,7 +3390,12 @@ async function sendChatPromptToAI() {
     // Background swatch) are deliberately kept — they stay pinned across
     // several follow-up prompts until the user removes the chip by hand,
     // per the slide-scoped AI editing feature (see slide-studio.js).
-    APP_STATE.selectedCommands = APP_STATE.selectedCommands.filter(c => c.id === 'chat' || c.id === 'edit_slide' || c.id === 'custom_background');
+    {
+      const _before = APP_STATE.selectedCommands.slice();
+      APP_STATE.selectedCommands = _before.filter(c => typeof keepAtCommandAfterSend === 'function'
+        ? keepAtCommandAfterSend(c, _before)
+        : (c.id === 'chat' || c.id === 'edit_slide' || c.id === 'custom_background'));
+    }
     if (typeof renderSelectedCommandChips === 'function') renderSelectedCommandChips();
     if (typeof closeAtCommandMenu === 'function') closeAtCommandMenu();
     APP_STATE.isAIGenerating = true;
@@ -3410,7 +3456,36 @@ async function sendChatPromptToAI() {
       const fileContextString = typeof buildAttachmentContextForAI === 'function' ? buildAttachmentContextForAI(promptText, shouldUseMemory, intentPayload) : '';
 
       const requestedPageNumber = intentPayload.pageTarget || (typeof detectRequestedPageNumber === 'function' ? detectRequestedPageNumber(promptText) : null);
-      const pageContext = intentPayload.intent === 'edit' && Array.isArray(intentPayload.editPages) && intentPayload.editPages.length > 1 ? (typeof getMultiPageEditContext === 'function' ? getMultiPageEditContext(intentPayload.editPages) : null) : (requestedPageNumber ? (typeof getPageRangeContext === 'function' ? getPageRangeContext(requestedPageNumber) : null) : null);
+      const _multiScopePages = intentPayload.intent === 'edit' ? (intentPayload.editPages || []) : (intentPayload.intent === 'add' ? (intentPayload.pageNumbers || []) : []);
+      const pageContext = _multiScopePages.length > 1 ? (typeof getMultiPageEditContext === 'function' ? getMultiPageEditContext(_multiScopePages) : null) : (requestedPageNumber ? (typeof getPageRangeContext === 'function' ? getPageRangeContext(requestedPageNumber) : null) : null);
+
+      // ========== CHAT + ADD/EDIT/REFINE (AI SUGGESTIONS) ==========
+      // @Chat switched on next to Add/Edit/Refine: answer with suggestions
+      // only. The document is NOT touched and the chips stay pinned. Tapping
+      // a suggestion turns Chat off and sends it to the selected page(s).
+      if (intentPayload.chatCompanion) {
+        const scopePages = intentPayload.pageNumbers || [];
+        const ctxText = scopePages.length
+          ? ((typeof getMultiPageEditContext === 'function' && getMultiPageEditContext(scopePages).contextString) || '')
+          : (typeof getCanvasContentWithLatexSource === 'function' ? getCanvasContentWithLatexSource().substring(0, 5000) : '');
+        const askBn = /[\u0980-\u09FF]/.test(promptText);
+        try {
+          const sugSystem = `You are a document co-pilot. The user selected the action "${intentPayload.intent.toUpperCase()}"${scopePages.length ? ` for page(s) ${scopePages.join(', ')}` : ''} and turned Chat on, so DO NOT change the document. Reply ONLY with JSON: {"action":"suggest","message":"1-3 short sentences","suggestions":[{"label":"short button text","prompt":"complete instruction that could be sent as the ${intentPayload.intent} request"}]}. Give 3 to 5 concrete, different suggestions grounded in the page content. Write in ${askBn ? 'Bengali' : 'the same language as the user'}.`;
+          const sugResult = await callAIAPI([{ role: 'system', content: sugSystem }, { role: 'user', content: `USER MESSAGE:\n${promptText}\n\nCURRENT CONTENT:\n${ctxText}` }], { forceJson: true, modelsUsedSet: modelsUsed, maxTokens: undefined });
+          const sug = safeParseAIJson(sugResult.content, null);
+          if (loadingElement && loadingElement.isConnected) loadingElement.remove();
+          const list = sug && Array.isArray(sug.suggestions) ? sug.suggestions.filter(x => x && (x.prompt || x.label)).slice(0, 5) : [];
+          appendSuggestionMessageToUI((sug && sug.message) || (list.length ? 'Here are some ideas:' : String(sugResult.content || '').replace(/<[^>]*>/g, ' ').trim()), list);
+        } catch (sugErr) {
+          if (loadingElement && loadingElement.isConnected) loadingElement.remove();
+          if (typeof appendChatMessageToUI === 'function') appendChatMessageToUI('error', `Suggestion failed: ${sugErr.message || sugErr}`);
+        }
+        APP_STATE.suppressDocumentAIChat = false;
+        APP_STATE.isAIGenerating = false;
+        document.getElementById('send-message-btn').disabled = false;
+        inputField.focus();
+        return;
+      }
 
       // ========== EDIT PIPELINE ==========
       if (intentPayload.intent === 'edit') {
@@ -4046,7 +4121,8 @@ async function sendChatPromptToAI() {
       let documentWasUpdated = false;
       let chatReplyMessage = null;
 
-      if (['edit', 'refine'].includes(intentPayload.intent) && ['append_content', 'prepend_content', 'replace_all'].includes(parsedJson.action)) {
+      const _addIsPageScoped = intentPayload.intent === 'add' && Array.isArray(intentPayload.pageNumbers) && intentPayload.pageNumbers.length > 0;
+      if ((['edit', 'refine'].includes(intentPayload.intent) || _addIsPageScoped) && ['append_content', 'prepend_content', 'replace_all'].includes(parsedJson.action)) {
         console.warn('[Edit/Refine] rejected unsafe action:', parsedJson.action);
         if (typeof appendChatMessageToUI === 'function') appendChatMessageToUI('error', 'The AI returned an unsafe edit action, so the existing document was left unchanged. Please retry.');
         documentWasUpdated = false;
@@ -4084,7 +4160,7 @@ async function sendChatPromptToAI() {
           documentWasUpdated = true;
           _updateLivePageNumberFromCurrentDocument();
         } else if (parsedJson.action === 'update_pages' && Array.isArray(parsedJson.updates) && parsedJson.updates.length) {
-          const expected = intentPayload.intent === 'edit' && Array.isArray(intentPayload.editPages) ? [...intentPayload.editPages].sort((a, b) => a - b) : null;
+          const expected = intentPayload.intent === 'edit' && Array.isArray(intentPayload.editPages) ? [...intentPayload.editPages].sort((a, b) => a - b) : (_addIsPageScoped ? [...intentPayload.pageNumbers].sort((a, b) => a - b) : null);
           const actual = parsedJson.updates.map(u => parseInt(u.page_number, 10)).filter(Number.isInteger).sort((a, b) => a - b);
           const complete = !expected || (expected.length === actual.length && expected.every((n, i) => n === actual[i]));
           if (!complete) {
@@ -4101,6 +4177,9 @@ async function sendChatPromptToAI() {
               if (typeof appendChatMessageToUI === 'function') appendChatMessageToUI('error', chatReplyMessage);
             }
           }
+        } else if (parsedJson.action === 'update_page' && parsedJson.page_number && typeof parsedJson.new_html === 'string' && _addIsPageScoped && !(intentPayload.pageNumbers.length === 1 && intentPayload.pageNumbers[0] === parseInt(parsedJson.page_number, 10))) {
+          chatReplyMessage = '⚠️ The AI tried to change a page you did not select. No changes were made.';
+          if (typeof appendChatMessageToUI === 'function') appendChatMessageToUI('error', chatReplyMessage);
         } else if (parsedJson.action === 'update_page' && parsedJson.page_number && typeof parsedJson.new_html === 'string') {
           if (typeof HISTORY !== 'undefined' && HISTORY.saveState) HISTORY.saveState();
           const pageUpdateApplied = typeof updateSpecificPageByNumber === 'function' ? updateSpecificPageByNumber(parseInt(parsedJson.page_number, 10), parsedJson.new_html) : false;
