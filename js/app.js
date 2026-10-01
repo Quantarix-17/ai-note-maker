@@ -3167,6 +3167,97 @@ function _setPendingClarifyState(intentId, originalPrompt, question) {
   APP_STATE.pendingClarify = { intent: intentId, originalPrompt, question, qaHistory };
 }
 
+function _hasAttachedFiles0() {
+  return !!(APP_STATE.attachedFiles && Object.keys(APP_STATE.attachedFiles).length > 0);
+}
+
+// ===== @ADD PLACEMENT (where should the new material go?) =====
+function _bnDigitsToEn(str) {
+  return String(str || '').replace(/[\u09E6-\u09EF]/g, d => String(d.charCodeAt(0) - 0x09E6));
+}
+function _getDocPageCount() {
+  if (typeof getPageCount === 'function') return getPageCount();
+  return document.querySelectorAll('#document-view-container .doc-page-canvas').length;
+}
+// Reads a placement out of the user's prompt / clarify answer.
+// Returns {mode:'pages', pages:[...]} | {mode:'start'} | {mode:'end'} | null.
+function _detectAddPlacement(text) {
+  const t = _bnDigitsToEn(text).toLowerCase();
+  if (!t.trim()) return null;
+  let m = t.match(/(?:\bpages?\b|\bpg\b|পেজ|পৃষ্ঠা)\s*[:#\-]?\s*(\d+(?:\s*(?:,|&|and|এবং|\s)\s*\d+)*)/i)
+       || t.match(/(\d+)\s*(?:st|nd|rd|th|ম|র্থ|তম|no\.?|number|নম্বর|নং)\s*(?:page|pg|পেজ|পৃষ্ঠা)/i);
+  if (m) {
+    const pages = [...new Set((m[1].match(/\d+/g) || []).map(n => parseInt(n, 10)).filter(n => n > 0))];
+    if (pages.length) return { mode: 'pages', pages };
+  }
+  if (/\b(?:last|final)\s+(?:page|pg)\b|শেষ\s*(?:পেজ|পৃষ্ঠা)|shesh\s*page/.test(t)) {
+    const n = _getDocPageCount();
+    if (n > 0) return { mode: 'pages', pages: [n] };
+  }
+  if (/\bat the (?:start|beginning|top)\b|\bbeginning\b|\bstart of (?:the )?(?:document|pdf|note|file)\b|\bprepend\b|শুরুতে|সবার আগে|\bshuru(?:te)?\b|\bsuru(?:te)?\b/.test(t)) return { mode: 'start' };
+  if (/\b(?:at |to |in )?the end\b|\bend of (?:the )?(?:document|pdf|note|file|everything)\b|\bat the bottom\b|\bappend\b|\bafter everything\b|শেষে|\bsheshe\b|\bshesh e\b/.test(t)) return { mode: 'end' };
+  return null;
+}
+
+// "Where should I add this?" as tap-to-choose options (input stays locked
+// until an option is tapped or "Write my own answer" is used).
+function appendAddPlacementClarifyToUI(question, lastPage, bn) {
+  const msgDiv = typeof appendChatMessageToUI === 'function'
+    ? appendChatMessageToUI('ai', `<div class="clarify-question">${_clarifyEscapeHtml(question)}</div>`) : null;
+  if (!msgDiv || !msgDiv.appendChild) return msgDiv;
+  const wrap = document.createElement('div');
+  wrap.className = 'clarify-options';
+  const opts = bn
+    ? [{ label: 'ডকুমেন্টের শেষে' }, { label: `শেষ পেজে (পেজ ${lastPage})` }, { label: 'ডকুমেন্টের শুরুতে' }]
+    : [{ label: 'At the end of the document' }, { label: `On the last page (page ${lastPage})` }, { label: 'At the beginning' }];
+  if (typeof openEditPageModal === 'function') opts.push({ label: bn ? 'নির্দিষ্ট পেজ বেছে নিন…' : 'Choose page(s)…', pick: true });
+
+  const lockAll = (selectedBtn) => {
+    wrap.querySelectorAll('.clarify-option-btn').forEach(b => { b.disabled = true; if (b !== selectedBtn) b.classList.add('clarify-option-disabled'); });
+    selectedBtn.classList.add('clarify-option-selected');
+  };
+  const send = (answer) => {
+    _unlockChatInput();
+    const inputField = document.getElementById('chat-input-textarea');
+    if (inputField) inputField.value = answer;
+    if (typeof sendChatPromptToAI === 'function') sendChatPromptToAI();
+  };
+  opts.forEach(o => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'clarify-option-btn';
+    btn.textContent = o.label;
+    btn.addEventListener('click', () => {
+      if (o.pick) {
+        Promise.resolve(openEditPageModal()).then(pages => {
+          if (pages && pages.length) { lockAll(btn); send((bn ? 'পেজ ' : 'Page ') + pages.join(', ')); }
+        });
+        return;
+      }
+      lockAll(btn);
+      send(o.label);
+    });
+    wrap.appendChild(btn);
+  });
+  const customBtn = document.createElement('button');
+  customBtn.type = 'button';
+  customBtn.className = 'clarify-option-btn clarify-option-custom';
+  customBtn.textContent = '✍️ Write my own answer';
+  customBtn.addEventListener('click', () => {
+    lockAll(customBtn);
+    _unlockChatInput();
+    const inputField = document.getElementById('chat-input-textarea');
+    if (inputField) { inputField.value = ''; inputField.focus(); }
+    if (typeof displayToastNotification === 'function') displayToastNotification('Type where to add it (e.g. "after page 3") and send.');
+  });
+  wrap.appendChild(customBtn);
+  msgDiv.appendChild(wrap);
+  _lockChatInputForOptions(msgDiv);
+  const area = document.getElementById('chat-history');
+  if (area) area.scrollTop = area.scrollHeight;
+  return msgDiv;
+}
+
 // ===== OPTION-ONLY INPUT LOCK =====
 // While the AI is showing tap-to-choose options, the chat box is locked: the
 // only way forward is tapping an option, or tapping "Write my own answer"
@@ -3446,6 +3537,48 @@ async function sendChatPromptToAI() {
       return;
     }
 
+    // ===== ADD: WHERE TO PUT THE NEW MATERIAL =====
+    // Page(s) chosen (chip / modal / typed "page 3" / "last page") -> insert
+    // right after that page. "end" / "beginning" are also understood from the
+    // prompt. If the request says nothing about WHERE, ask with options
+    // instead of guessing.
+    if (intentPayload.intent === 'add' && !intentPayload.chatCompanion) {
+      let placement = (intentPayload.pageNumbers && intentPayload.pageNumbers.length)
+        ? { mode: 'pages', pages: intentPayload.pageNumbers.slice() }
+        : _detectAddPlacement(_clarifyRawAnswer);
+      const docHasContent = typeof hasDocumentContentForAtCommands === 'function' ? hasDocumentContentForAtCommands() : true;
+      if (!placement && docHasContent && !_hasAttachedFiles0()) {
+        if (_isPendingClarifyContinuation) {
+          placement = { mode: 'free' };
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 300));
+          if (loadingElement && loadingElement.isConnected) loadingElement.remove();
+          const bn = /[\u0980-\u09FF]/.test(_clarifyRawAnswer);
+          const q = bn ? 'এটা কোথায় যোগ করতে চান? একটি অপশন বেছে নিন।' : 'Where should I add this? Pick a spot, or choose the page(s) yourself.';
+          _setPendingClarifyState('add', _clarifyOriginalPromptForThisTurn, q);
+          if (typeof _rePinIntentCommandForClarify === 'function') _rePinIntentCommandForClarify('add');
+          appendAddPlacementClarifyToUI(q, Math.max(1, _getDocPageCount()), bn);
+          APP_STATE.isAIGenerating = false;
+          document.getElementById('send-message-btn').disabled = false;
+          return;
+        }
+      }
+      if (placement && placement.mode === 'pages') {
+        const total = _getDocPageCount();
+        let pages = placement.pages.filter(n => n >= 1);
+        if (total > 0 && pages.some(n => n > total)) {
+          pages = [...new Set(pages.map(n => Math.min(n, total)))];
+          if (typeof displayToastNotification === 'function') displayToastNotification(`The document has ${total} page(s) — using page ${pages[pages.length - 1]}.`);
+        }
+        pages.sort((a, b) => a - b);
+        intentPayload.pageNumbers = pages;
+        intentPayload.pageTarget = pages[0] || null;
+        intentPayload.addPlacement = 'pages';
+      } else if (placement) {
+        intentPayload.addPlacement = placement.mode;
+      }
+    }
+
     const analyticsStart = Date.now();
     const modelsUsed = new Set();
 
@@ -3473,7 +3606,7 @@ async function sendChatPromptToAI() {
 
       const requestedPageNumber = intentPayload.pageTarget || (typeof detectRequestedPageNumber === 'function' ? detectRequestedPageNumber(promptText) : null);
       const _multiScopePages = intentPayload.intent === 'edit' ? (intentPayload.editPages || []) : (intentPayload.intent === 'add' ? (intentPayload.pageNumbers || []) : []);
-      const pageContext = _multiScopePages.length > 1 ? (typeof getMultiPageEditContext === 'function' ? getMultiPageEditContext(_multiScopePages) : null) : (requestedPageNumber ? (typeof getPageRangeContext === 'function' ? getPageRangeContext(requestedPageNumber) : null) : null);
+      const pageContext = _multiScopePages.length > 1 ? (typeof getMultiPageEditContext === 'function' ? getMultiPageEditContext(_multiScopePages) : null) : ((intentPayload.intent !== 'add' || _multiScopePages.length === 1) && requestedPageNumber ? (typeof getPageRangeContext === 'function' ? getPageRangeContext(requestedPageNumber) : null) : null);
 
       // ========== CHAT + ADD/EDIT/REFINE (AI SUGGESTIONS) ==========
       // @Chat switched on next to Add/Edit/Refine: answer with suggestions
@@ -4025,8 +4158,9 @@ async function sendChatPromptToAI() {
       if (pageContext) {
         const multiEdit = intentPayload.intent === 'edit' && Array.isArray(intentPayload.editPages) && intentPayload.editPages.length > 1;
         const addPages = intentPayload.intent === 'add' && Array.isArray(intentPayload.pageNumbers) ? intentPayload.pageNumbers : [];
+        const addAfter = addPages.length ? Math.max(...addPages) : null;
         const instruction = intentPayload.intent === 'add'
-          ? `\nADD new material to the selected page${addPages.length === 1 ? '' : 's'} ${addPages.join(', ')}. Preserve existing content and return an update_pages/update_page action that keeps the old material and adds the requested material.\n\nCONTEXT:\n${pageContext.contextString}`
+          ? `\nADD new material starting right after the content of page ${addAfter}${addPages.length > 1 ? ` (selected pages: ${addPages.join(', ')})` : ''}. The page context below is READ-ONLY reference so your addition continues naturally and repeats nothing. Return {"action":"append_content","html_content":"<ONLY the new material>","chat_summary":"..."} — do NOT include existing page content and do NOT return update_page/update_pages. The app inserts your content right after page ${addAfter} and re-paginates, so it may flow onto following pages.\n\nCONTEXT (read only):\n${pageContext.contextString}`
           : (multiEdit ? `\nEDIT ONLY PAGES: ${intentPayload.editPages.join(', ')}. Return action "update_pages" with EVERY selected page.\n\nCONTEXT:\n${pageContext.contextString}` : `\nEDIT ONLY TARGET PAGE ${pageContext.targetPage || requestedPageNumber}. Return action "update_page" with page_number and only that page's new_html.\n\nCONTEXT:\n${pageContext.contextString}`);
         apiMessagesArray.push({ role: 'user', content: await buildAIUserContent(promptText, fileContextString, instruction) });
       } else {
@@ -4138,13 +4272,26 @@ async function sendChatPromptToAI() {
       let chatReplyMessage = null;
 
       const _addIsPageScoped = intentPayload.intent === 'add' && Array.isArray(intentPayload.pageNumbers) && intentPayload.pageNumbers.length > 0;
-      if ((['edit', 'refine'].includes(intentPayload.intent) || _addIsPageScoped) && ['append_content', 'prepend_content', 'replace_all'].includes(parsedJson.action)) {
+      const _unsafeForScope = _addIsPageScoped ? ['prepend_content', 'replace_all'] : ['append_content', 'prepend_content', 'replace_all'];
+      if ((['edit', 'refine'].includes(intentPayload.intent) || _addIsPageScoped) && _unsafeForScope.includes(parsedJson.action)) {
         console.warn('[Edit/Refine] rejected unsafe action:', parsedJson.action);
         if (typeof appendChatMessageToUI === 'function') appendChatMessageToUI('error', 'The AI returned an unsafe edit action, so the existing document was left unchanged. Please retry.');
         documentWasUpdated = false;
         chatReplyMessage = 'Edit not applied — unsafe action rejected.';
       } else {
-        if (parsedJson.action === 'prepend_content' && parsedJson.html_content) {
+        if (_addIsPageScoped && (parsedJson.action === 'append_content' || !parsedJson.action) && parsedJson.html_content) {
+          const afterPage = Math.max(...intentPayload.pageNumbers);
+          if (typeof HISTORY !== 'undefined' && HISTORY.saveState) HISTORY.saveState();
+          const inserted = typeof insertHtmlAfterPage === 'function' ? await insertHtmlAfterPage(afterPage, parsedJson.html_content) : false;
+          if (inserted) {
+            chatReplyMessage = parsedJson.chat_summary || `✅ Added after page ${afterPage}.`;
+            documentWasUpdated = true;
+            _updateLivePageNumberFromCurrentDocument();
+          } else {
+            chatReplyMessage = `⚠️ Could not add after page ${afterPage} — no changes made.`;
+            if (typeof appendChatMessageToUI === 'function') appendChatMessageToUI('error', chatReplyMessage);
+          }
+        } else if (parsedJson.action === 'prepend_content' && parsedJson.html_content) {
           if (typeof HISTORY !== 'undefined' && HISTORY.saveState) HISTORY.saveState();
           if (typeof setDocumentHTMLAndPaginate === 'function') setDocumentHTMLAndPaginate(isCanvasEmpty ? parsedJson.html_content : parsedJson.html_content + currentFullHTML);
           const container = document.getElementById('document-view-container');
