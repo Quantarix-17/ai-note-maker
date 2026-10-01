@@ -1283,7 +1283,7 @@ function buildIntentPayload() {
   // @Edit param (only nums.slice(1) was kept), so a single selected page
   // produced an empty page list and the page picker re-opened on send.
   const parsePages = str => (str || '').split(/[\s,]+/).map(n => parseInt(n, 10)).filter(n => Number.isInteger(n) && n > 0);
-  const PAGE_PARAM_INTENTS = ['edit', 'refine', 'refine_equation', 'redesign_diagram'];
+  const PAGE_PARAM_INTENTS = ['edit', 'refine', 'refine_equation', 'redesign_diagram', 'add'];
   const intentPages = PAGE_PARAM_INTENTS.includes(intentCmd.id) ? parsePages(intentCmd.param) : [];
   const targetPages = parsePages(targetCmd && targetCmd.param);
   const pageNumbers = [...new Set([...intentPages, ...targetPages])].sort((a, b) => a - b);
@@ -1354,9 +1354,13 @@ function buildAtCommandInstructionText(intentPayload) {
   }
   if (intentPayload.intent === 'add') {
     if (intentPayload.pageNumbers && intentPayload.pageNumbers.length) {
-      parts.push(`ADD SAFETY (PAGE-SCOPED): Add the requested material ONLY to page(s) ${intentPayload.pageNumbers.join(', ')}. Return update_page (one page) or update_pages (EVERY selected page) containing that page's full existing content plus the new material. Never use append_content, prepend_content or replace_all, and never touch unselected pages.`);
+      parts.push(`ADD SAFETY (PAGE-SCOPED): The user chose where to add: right after page ${Math.max(...intentPayload.pageNumbers)}. Return {"action":"append_content","html_content":"<ONLY the new material>"}. Do NOT repeat or rewrite existing content, do NOT return update_page/update_pages/prepend_content/replace_all. The app inserts your content right after that page and re-paginates, so a long addition flows onto following pages.`);
+    } else if (intentPayload.addPlacement === 'start') {
+      parts.push('ADD PLACEMENT: put the new material at the very BEGINNING of the document. Return prepend_content with ONLY the new material; never replace or delete existing content.');
+    } else if (intentPayload.addPlacement === 'end') {
+      parts.push('ADD PLACEMENT: put the new material at the very END of the document. Return append_content with ONLY the new material; never replace or delete existing content.');
     } else {
-      parts.push('ADD SAFETY: Append the requested new material. Never replace or delete existing content; create continuation pages when needed.');
+      parts.push('ADD SAFETY: Add the requested new material where the user asked (follow any placement instruction in the request). Never replace or delete existing content; return only the NEW material.');
     }
   }
   if (intentPayload.intent === 'redesign_diagram') {
